@@ -1,0 +1,2 @@
+- [Non-standard stack requests](non-standard-stack-requests.md) — when a user specs a stack the workspace can't run (e.g. Flask/Python), substitute the closest supported artifact combo and explain the swap, don't ask first.
+- [Artifact workflow naming](artifact-workflow-naming.md) — restart_workflow needs the exact name from listWorkflows(), not the artifact title or slug guess.

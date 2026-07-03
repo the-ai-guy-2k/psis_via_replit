@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type Handedness = typeof Handedness[keyof typeof Handedness];
+
+
+export const Handedness = {
+  L: 'L',
+  R: 'R',
+} as const;

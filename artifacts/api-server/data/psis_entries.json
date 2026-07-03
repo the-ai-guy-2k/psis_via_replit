@@ -1,0 +1,72 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "createdAt": "2026-07-01T18:04:00.000Z",
+    "pitcherHandedness": "R",
+    "batterHandedness": "L",
+    "pitchSequence": "FB-SL-CH",
+    "result": "strikeout",
+    "resultCategory": "good",
+    "goodCount": 3,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 3,
+    "notes": "Batter chased the changeup low and away."
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "createdAt": "2026-07-01T18:12:00.000Z",
+    "pitcherHandedness": "R",
+    "batterHandedness": "R",
+    "pitchSequence": "FB-FB-SL",
+    "result": "ground_out",
+    "resultCategory": "good",
+    "goodCount": 2,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 2,
+    "notes": "Weak roll over to short."
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "createdAt": "2026-07-02T01:30:00.000Z",
+    "pitcherHandedness": "L",
+    "batterHandedness": "L",
+    "pitchSequence": "CB-FB-CB",
+    "result": "hit",
+    "resultCategory": "bad",
+    "goodCount": 0,
+    "badCount": 2,
+    "strikeoutCount": 0,
+    "delta": -2,
+    "notes": "Hung the curveball, lined to left."
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "createdAt": "2026-07-02T01:45:00.000Z",
+    "pitcherHandedness": "R",
+    "batterHandedness": "L",
+    "pitchSequence": "FB-SL-CH",
+    "result": "pop_out",
+    "resultCategory": "good",
+    "goodCount": 2,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 2,
+    "notes": "Same sequence worked again in the 4th."
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "createdAt": "2026-07-02T02:05:00.000Z",
+    "pitcherHandedness": "L",
+    "batterHandedness": "R",
+    "pitchSequence": "SI-SI-FB",
+    "result": "home_run",
+    "resultCategory": "bad",
+    "goodCount": 0,
+    "badCount": 3,
+    "strikeoutCount": 0,
+    "delta": -3,
+    "notes": "Third straight sinker, batter was ready for it."
+  }
+]

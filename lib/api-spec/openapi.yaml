@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PSIS - Pitch Sequence Intelligence System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: entries
+    description: Inning / pitch sequence entries
+  - name: dashboard
+    description: Dashboard aggregates
 paths:
   /healthz:
     get:
@@ -24,6 +28,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /entries:
+    get:
+      operationId: listEntries
+      tags: [entries]
+      summary: List all pitch sequence entries, most recent first
+      responses:
+        "200":
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entry"
+    post:
+      operationId: createEntry
+      tags: [entries]
+      summary: Record a new pitch sequence entry for a plate appearance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntryInput"
+      responses:
+        "201":
+          description: Created entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard aggregates across all recorded entries
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +86,131 @@ components:
           type: string
       required:
         - status
-
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+    Handedness:
+      type: string
+      enum: [L, R]
+    ResultOutcome:
+      type: string
+      enum:
+        - strikeout
+        - ground_out
+        - fly_out
+        - pop_out
+        - double_play
+        - weak_contact
+        - hit
+        - walk
+        - home_run
+        - hard_contact
+        - run_scored
+        - pressure_error
+    OutcomeCategory:
+      type: string
+      enum: [good, bad]
+    CreateEntryInput:
+      type: object
+      properties:
+        pitcherHandedness:
+          $ref: "#/components/schemas/Handedness"
+        batterHandedness:
+          $ref: "#/components/schemas/Handedness"
+        pitchSequence:
+          type: string
+          minLength: 1
+          description: The sequence of pitches thrown, e.g. "FB-SL-CH"
+        result:
+          $ref: "#/components/schemas/ResultOutcome"
+        goodCount:
+          type: integer
+          minimum: 0
+        badCount:
+          type: integer
+          minimum: 0
+        strikeoutCount:
+          type: integer
+          minimum: 0
+        notes:
+          type: string
+      required:
+        - pitcherHandedness
+        - batterHandedness
+        - pitchSequence
+        - result
+        - goodCount
+        - badCount
+        - strikeoutCount
+    Entry:
+      allOf:
+        - $ref: "#/components/schemas/CreateEntryInput"
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: string
+            resultCategory:
+              $ref: "#/components/schemas/OutcomeCategory"
+            delta:
+              type: integer
+          required:
+            - id
+            - createdAt
+            - resultCategory
+            - delta
+    SequenceStat:
+      type: object
+      properties:
+        pitchSequence:
+          type: string
+        totalDelta:
+          type: integer
+        averageDelta:
+          type: number
+        occurrences:
+          type: integer
+      required:
+        - pitchSequence
+        - totalDelta
+        - averageDelta
+        - occurrences
+    DashboardSummary:
+      type: object
+      properties:
+        recentEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+        bestSequences:
+          type: array
+          items:
+            $ref: "#/components/schemas/SequenceStat"
+        worstSequences:
+          type: array
+          items:
+            $ref: "#/components/schemas/SequenceStat"
+        totalGood:
+          type: integer
+        totalBad:
+          type: integer
+        totalStrikeouts:
+          type: integer
+        averageDelta:
+          type: number
+        entryCount:
+          type: integer
+      required:
+        - recentEntries
+        - bestSequences
+        - worstSequences
+        - totalGood
+        - totalBad
+        - totalStrikeouts
+        - averageDelta
+        - entryCount

@@ -1,44 +1,54 @@
-# [Project name]
+# PSIS — Pitch Sequence Intelligence System
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A web tool for baseball pitching coaches to log pitch sequences per plate appearance and track Good/Bad/Delta outcomes, with a dashboard of best/worst sequences and season-to-date aggregates.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Preview: the `artifacts/psis: web` and `artifacts/api-server: API Server` workflows run automatically; restart via the workflows skill if code changes aren't reflected.
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from `lib/api-spec/openapi.yaml` after any contract change
+- No database setup needed — this app intentionally uses flat-file JSON storage (see Architecture decisions).
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite (`artifacts/psis`), wouter routing, react-query, react-hook-form + Zod
+- API: Express 5 (`artifacts/api-server`)
+- Storage: flat JSON file (`artifacts/api-server/data/psis_entries.json`) — no Postgres/Drizzle used
+- Validation: Zod (`zod/v4`)
+- API codegen: Orval (from OpenAPI spec) — generates typed React Query hooks
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — source-of-truth API contract (entries, dashboard, schemas)
+- `artifacts/api-server/src/lib/psisStore.ts` — JSON file read/write/append helpers
+- `artifacts/api-server/src/routes/entries.ts` — GET/POST `/entries`
+- `artifacts/api-server/src/routes/dashboard.ts` — GET `/dashboard` (aggregates, best/worst sequences)
+- `artifacts/api-server/data/psis_entries.json` — the actual data store (seeded with 5 example entries)
+- `artifacts/psis/src/pages/` — home, track (data-entry form), dashboard
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **Original spec asked for Python/Flask + a JSON file, but this workspace only supports pnpm/TypeScript artifacts (React+Vite / Express).** Rebuilt the same functionality on the supported stack: React+Vite frontend + Express backend, keeping the JSON-file storage intent (no Postgres) since the original spec emphasized simplest possible storage.
+- Result categorization is fixed server-side: GOOD = strikeout, ground_out, fly_out, pop_out, double_play, weak_contact; BAD = hit, walk, home_run, hard_contact, run_scored, pressure_error. Delta = goodCount − badCount, computed on the server at entry-creation time.
+- Best/worst sequence rankings are computed on read (grouped by exact pitch sequence string, e.g. `FB-SL-CH`), not stored — cheap given expected data volume for a single team/season.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Home** — landing page explaining PSIS.
+- **Tracker** (`/track`) — log a plate appearance: pitcher/batter handedness, pitch sequence string, outcome, good/bad/strikeout counts, notes. Shows a running "recent log" sidebar.
+- **Dashboard** (`/dashboard`) — entry count, total good/bad, average delta, top 5 / bottom 5 pitch sequences by average delta, and a recent entries table.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+_None recorded yet._
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- After editing `artifacts/api-server/src/routes/*`, you must restart the `artifacts/api-server: API Server` workflow — it does not hot-reload route registration changes reliably.
+- Use `listWorkflows()` to get the exact workflow name before calling `restart_workflow` — it's not the artifact title or slug (see memory: artifact-workflow-naming).
+- Editing `data/psis_entries.json` directly requires reading it first (write tool enforces this), and requires an API server restart to pick up changes.
 
 ## Pointers
 
