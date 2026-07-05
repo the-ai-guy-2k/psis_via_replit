@@ -583,5 +583,20 @@
     "delta": 1,
     "inningNumber": 11,
     "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "ground_out",
+    "outcomeDetail": "double_play",
+    "id": "67faaaf9-ba33-456c-b7d3-1fa659fb5da6",
+    "createdAt": "2026-07-05T22:45:54.509Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "inningNumber": 11,
+    "outsAdded": 2,
+    "playersLeftOnBase": 1
   }
 ]

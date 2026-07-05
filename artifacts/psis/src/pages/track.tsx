@@ -13,7 +13,7 @@ import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,6 +37,33 @@ type WizardState = {
 
 const emptyWizard: WizardState = { started: false };
 
+type CompletedInningDelta = { inningNumber: number; delta: number };
+
+/**
+ * Completed-inning delta history for the Game Status Panel, derived purely
+ * client-side from the full entries list — an inning counts as "completed"
+ * once its at-bats' outsAdded sum to 3, mirroring the server's own
+ * completion rule (see computeInningState in psisStore.ts) without adding a
+ * new API endpoint.
+ */
+function computeCompletedInningDeltas(
+  entries: { inningNumber?: number; delta: number; outsAdded?: number }[] | undefined,
+): CompletedInningDelta[] {
+  if (!entries) return [];
+  const byInning = new Map<number, { delta: number; outs: number }>();
+  for (const entry of entries) {
+    if (entry.inningNumber === undefined) continue;
+    const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0 };
+    current.delta += entry.delta;
+    current.outs += entry.outsAdded ?? 0;
+    byInning.set(entry.inningNumber, current);
+  }
+  return Array.from(byInning.entries())
+    .filter(([, v]) => v.outs >= 3)
+    .map(([inningNumber, v]) => ({ inningNumber, delta: v.delta }))
+    .sort((a, b) => a.inningNumber - b.inningNumber);
+}
+
 export default function Track() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -53,8 +80,8 @@ export default function Track() {
   const [lobCount, setLobCount] = useState<number | undefined>(undefined);
 
   // Outcome types that need a follow-up click before an EABR (End of At-Bat
-  // Result) is reached. Everything else (strikeout, infield_out, walk) is
-  // itself the EABR the instant it's clicked.
+  // Result) is reached. Everything else (strikeout, walk) is itself the
+  // EABR the instant it's clicked.
   const detailOptions = wizard.outcomeType ? detailOptionsForOutcomeType(wizard.outcomeType) : undefined;
   const needsDetail = !!detailOptions;
   const needsRunsScored = wizard.outcomeType === "run_scored";
@@ -160,6 +187,7 @@ export default function Track() {
   };
 
   const recentEntry = entries?.[0];
+  const completedInningDeltas = computeCompletedInningDeltas(entries);
 
   const waitingForNextInning = !!inning?.completed && acknowledgedInning === inning.inningNumber;
   const showCompletedSummary = !!inning?.completed && !waitingForNextInning;
@@ -226,47 +254,72 @@ export default function Track() {
         <Card className="rounded-none border-t-4 border-t-primary">
           <CardHeader className="bg-muted/50 pb-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
-                <CardDescription>Fast outcome entry — no pitcher, batter, or pitch sequence details required.</CardDescription>
-              </div>
+              <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
               {!inningLoading && (
                 <div
-                  className="flex items-center gap-4 bg-card border rounded-sm px-4 py-2"
-                  data-testid="inning-status-bar"
+                  className="flex items-start gap-4 bg-card border rounded-sm px-4 py-3 flex-wrap"
+                  data-testid="game-status-panel"
                 >
-                  <div className="text-center">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
-                    <div className="font-mono font-bold text-lg" data-testid="text-inning-number">
-                      {displayInningNumber}
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Game Status</div>
                     </div>
                   </div>
-                  <Separator orientation="vertical" className="h-8" />
-                  <div className="text-center">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
-                    <div className="flex items-center gap-1 font-mono font-bold text-lg" data-testid="text-inning-outs">
-                      {displayOuts} / 3
-                      <span className="flex gap-0.5 ml-1">
-                        {[0, 1, 2].map(i => (
-                          <Circle
-                            key={i}
-                            className={`w-2.5 h-2.5 ${i < displayOuts ? "fill-destructive text-destructive" : "text-muted-foreground/30"}`}
-                          />
-                        ))}
-                      </span>
+                  <Separator orientation="vertical" className="h-10 hidden sm:block" />
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
+                      <div className="font-mono font-bold text-lg" data-testid="text-inning-number">
+                        {displayInningNumber}
+                      </div>
+                    </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="text-center">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
+                      <div className="flex items-center gap-1 font-mono font-bold text-lg" data-testid="text-inning-outs">
+                        {displayOuts} / 3
+                        <span className="flex gap-0.5 ml-1">
+                          {[0, 1, 2].map(i => (
+                            <Circle
+                              key={i}
+                              className={`w-2.5 h-2.5 ${i < displayOuts ? "fill-destructive text-destructive" : "text-muted-foreground/30"}`}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="text-center">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Current Δ</div>
+                      <div
+                        className={`font-mono font-bold text-lg ${displayDelta > 0 ? "text-success" : displayDelta < 0 ? "text-destructive" : ""}`}
+                        data-testid="text-inning-delta"
+                      >
+                        {displayDelta > 0 ? "+" : ""}
+                        {displayDelta}
+                      </div>
                     </div>
                   </div>
-                  <Separator orientation="vertical" className="h-8" />
-                  <div className="text-center">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning Δ</div>
-                    <div
-                      className={`font-mono font-bold text-lg ${displayDelta > 0 ? "text-success" : displayDelta < 0 ? "text-destructive" : ""}`}
-                      data-testid="text-inning-delta"
-                    >
-                      {displayDelta > 0 ? "+" : ""}
-                      {displayDelta}
-                    </div>
-                  </div>
+                  {completedInningDeltas.length > 0 && (
+                    <>
+                      <Separator orientation="vertical" className="h-10 hidden sm:block" />
+                      <div className="text-center sm:text-left" data-testid="completed-inning-deltas">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Completed</div>
+                        <div className="font-mono text-xs flex flex-wrap gap-x-2 gap-y-0.5 max-w-xs">
+                          {completedInningDeltas.map(({ inningNumber, delta }) => (
+                            <span
+                              key={inningNumber}
+                              className={delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : ""}
+                              data-testid={`completed-inning-delta-${inningNumber}`}
+                            >
+                              {inningNumber}: {delta > 0 ? "+" : ""}
+                              {delta}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

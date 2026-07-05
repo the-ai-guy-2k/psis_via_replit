@@ -10,12 +10,17 @@ export interface DetailOption {
   label: string;
 }
 
-/** Top-level defense options shown after clicking "Defense" in the EABR click flow. */
+/**
+ * Top-level defense options shown after clicking "Defense" in the EABR click
+ * flow. `infield_out` was removed from this list per the approved tracker
+ * logic update — it is kept in the OutcomeType schema enum purely so
+ * pre-existing entries that used it keep validating; the wizard never
+ * produces it anymore.
+ */
 export const DEFENSE_OUTCOMES: OutcomeOption[] = [
   { value: "strikeout", label: "Strikeout" },
   { value: "fly_out", label: "Fly Out" },
   { value: "ground_out", label: "Ground Out" },
-  { value: "infield_out", label: "Infield Out" },
 ];
 
 /** Top-level offense options shown after clicking "Offense" in the EABR click flow. */
