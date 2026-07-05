@@ -22,9 +22,10 @@ export interface CreateEntryInput {
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;
   /**
-     * Number of baserunners left on base, when applicable
-     * @minimum 0
+     * Number of runs scored on this at-bat, required when outcomeType is run_scored
+     * @minimum 1
+     * @maximum 4
      */
-  playersLeftOnBase?: number;
+  runsScored?: number;
   notes?: string;
 }

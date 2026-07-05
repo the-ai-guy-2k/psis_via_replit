@@ -1,0 +1,216 @@
+PSIS ACI UPDATE – TRACKER INNING LOGIC REVISION
+
+MISSION
+
+Update the PSIS Tracker so inning tracking follows real baseball workflow while preserving the Good-minus-Bad Delta philosophy.
+
+==================================================
+CHANGE 1
+==================================================
+
+REMOVE
+
+Do NOT ask:
+
+"Players Left On Base?"
+
+after every Ground Out, Fly Out, Double Play, or Triple Play.
+
+==================================================
+NEW LOGIC
+==================================================
+
+When the inning reaches 3 outs:
+
+Display the Inning Summary screen.
+
+Only then ask:
+
+Were there any runners left on base?
+
+Choices:
+
+- No
+- Yes
+
+If Yes:
+
+Prompt:
+
+How many runners were left on base?
+
+Allow:
+
+- 1
+- 2
+- 3
+
+Store this value as part of the inning summary instead of an individual at-bat.
+
+==================================================
+CHANGE 2
+==================================================
+
+RUN SCORED
+
+When the user selects:
+
+Run Scored
+
+Prompt:
+
+How many runs scored?
+
+Allow values:
+
+1
+2
+3
+4
+
+(Allow manual numeric entry if easier.)
+
+Store:
+
+runsScored
+
+==================================================
+DELTA UPDATE
+==================================================
+
+The inning delta must include runs scored.
+
+Current calculation:
+
+Good Outcomes
+-
+Bad Outcomes
+
+Update to:
+
+Good Outcomes
+-
+Bad Outcomes
+-
+Runs Scored
+
+Example:
+
+Good = 5
+
+Bad = 2
+
+Runs = 1
+
+Delta = +2
+
+Another example:
+
+Good = 3
+
+Bad = 3
+
+Runs = 2
+
+Delta = -2
+
+==================================================
+INNING FLOW
+==================================================
+
+Start Inning
+
+↓
+
+Enter At-Bat
+
+↓
+
+Outcome Wizard
+
+↓
+
+Save At-Bat
+
+↓
+
+Update Outs
+
+↓
+
+If Outs < 3
+
+Repeat
+
+↓
+
+If Outs = 3
+
+Display Inning Summary
+
+↓
+
+Ask:
+
+Any runners left on base?
+
+↓
+
+If Yes
+
+How many?
+
+↓
+
+Calculate Final Inning Delta
+
+↓
+
+Save Inning
+
+↓
+
+Start Next Inning
+
+==================================================
+UPDATE THE UI
+==================================================
+
+The inning summary should display:
+
+- Inning Number
+- At-Bats
+- Outs
+- Good Outcomes
+- Bad Outcomes
+- Runs Scored
+- Runners Left On Base
+- Final Delta
+
+==================================================
+VALIDATION
+==================================================
+
+Verify:
+
+✓ Run Scored prompts for number of runs.
+
+✓ Runners Left On Base is only asked once, after the inning ends.
+
+✓ Inning automatically completes at 3 outs.
+
+✓ Delta includes runs scored.
+
+✓ Existing dashboard continues functioning.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation report:
+
+- Files changed
+- UI changes
+- Data model updates
+- Validation results
+- PASS / PARTIAL PASS / FAIL

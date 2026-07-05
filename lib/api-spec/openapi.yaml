@@ -67,6 +67,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /entries/{id}:
+    patch:
+      operationId: updateEntry
+      tags: [entries]
+      summary: Update an existing entry, currently used only to record runners left on base once an inning completes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEntryInput"
+      responses:
+        "200":
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /dashboard:
     get:
       operationId: getDashboard
@@ -169,15 +205,26 @@ components:
           $ref: "#/components/schemas/OutcomeType"
         outcomeDetail:
           $ref: "#/components/schemas/OutcomeDetail"
-        playersLeftOnBase:
+        runsScored:
           type: integer
-          minimum: 0
-          description: Number of baserunners left on base, when applicable
+          minimum: 1
+          maximum: 4
+          description: Number of runs scored on this at-bat, required when outcomeType is run_scored
         notes:
           type: string
       required:
         - outcomeCategory
         - outcomeType
+    UpdateEntryInput:
+      type: object
+      properties:
+        playersLeftOnBase:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Runners left on base for the inning this entry completed
+      required:
+        - playersLeftOnBase
     Entry:
       type: object
       properties:
@@ -197,8 +244,12 @@ components:
           $ref: "#/components/schemas/OutcomeType"
         outcomeDetail:
           $ref: "#/components/schemas/OutcomeDetail"
+        runsScored:
+          type: integer
+          description: Number of runs scored on this at-bat, only present when outcomeType is run_scored
         playersLeftOnBase:
           type: integer
+          description: Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field.
         result:
           $ref: "#/components/schemas/ResultOutcome"
           description: Legacy flat outcome value, only present on entries created before the outcome wizard
@@ -265,10 +316,10 @@ components:
           type: integer
         runsScored:
           type: integer
-          description: Count of at-bats in this inning with outcomeType run_scored
+          description: Total runs scored across this inning's run_scored at-bats
         playersLeftOnBase:
           type: integer
-          description: Sum of playersLeftOnBase captured across this inning's at-bats
+          description: Runners left on base, captured once when the inning completes
         atBats:
           type: array
           items:

@@ -17,9 +17,9 @@ export interface InningState {
   goodCount: number;
   badCount: number;
   inningDelta: number;
-  /** Count of at-bats in this inning with outcomeType run_scored */
+  /** Total runs scored across this inning's run_scored at-bats */
   runsScored: number;
-  /** Sum of playersLeftOnBase captured across this inning's at-bats */
+  /** Runners left on base, captured once when the inning completes */
   playersLeftOnBase: number;
   atBats: Entry[];
 }

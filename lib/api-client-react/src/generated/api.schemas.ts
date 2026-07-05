@@ -104,11 +104,21 @@ export interface CreateEntryInput {
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;
   /**
-     * Number of baserunners left on base, when applicable
-     * @minimum 0
+     * Number of runs scored on this at-bat, required when outcomeType is run_scored
+     * @minimum 1
+     * @maximum 4
      */
-  playersLeftOnBase?: number;
+  runsScored?: number;
   notes?: string;
+}
+
+export interface UpdateEntryInput {
+  /**
+     * Runners left on base for the inning this entry completed
+     * @minimum 0
+     * @maximum 3
+     */
+  playersLeftOnBase: number;
 }
 
 export interface Entry {
@@ -120,6 +130,9 @@ export interface Entry {
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
+  /** Number of runs scored on this at-bat, only present when outcomeType is run_scored */
+  runsScored?: number;
+  /** Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field. */
   playersLeftOnBase?: number;
   /** Legacy flat outcome value, only present on entries created before the outcome wizard */
   result?: ResultOutcome;
@@ -152,9 +165,9 @@ export interface InningState {
   goodCount: number;
   badCount: number;
   inningDelta: number;
-  /** Count of at-bats in this inning with outcomeType run_scored */
+  /** Total runs scored across this inning's run_scored at-bats */
   runsScored: number;
-  /** Sum of playersLeftOnBase captured across this inning's at-bats */
+  /** Runners left on base, captured once when the inning completes */
   playersLeftOnBase: number;
   atBats: Entry[];
 }

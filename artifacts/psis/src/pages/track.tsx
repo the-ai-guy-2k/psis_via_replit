@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateEntry,
+  useUpdateEntry,
   useListEntries,
   useGetCurrentInning,
   getListEntriesQueryKey,
@@ -11,7 +12,6 @@ import {
 import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,14 +21,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { describeOutcome, outcomesForCategory, outcomeAsksLeftOnBase } from "@/lib/outcome";
+import { describeOutcome, outcomesForCategory } from "@/lib/outcome";
 
 type WizardState = {
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
-  hasPlayersLeftOnBase?: boolean;
-  playersLeftOnBase?: number;
+  runsScored?: number;
 };
 
 const emptyWizard: WizardState = {};
@@ -40,13 +39,15 @@ export default function Track() {
   const { data: entries, isLoading: entriesLoading } = useListEntries();
   const { data: inning, isLoading: inningLoading } = useGetCurrentInning();
   const createEntry = useCreateEntry();
+  const updateEntry = useUpdateEntry();
 
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
   const [acknowledgedInning, setAcknowledgedInning] = useState<number | undefined>(undefined);
+  const [lobAwaitingCount, setLobAwaitingCount] = useState(false);
 
-  const showLeftOnBaseQuestion = outcomeAsksLeftOnBase(wizard.outcomeCategory, wizard.outcomeType);
   const showExtraBaseHitDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "extra_base_hit";
+  const showRunsScoredDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "run_scored";
 
   const selectCategory = (category: OutcomeCategory) => {
     setWizard({ outcomeCategory: category });
@@ -63,21 +64,15 @@ export default function Track() {
     setWizard(prev => ({ ...prev, outcomeDetail: detail }));
   };
 
-  const selectHasPlayersLeftOnBase = (hasPlayers: boolean) => {
-    setWizard(prev => ({
-      ...prev,
-      hasPlayersLeftOnBase: hasPlayers,
-      playersLeftOnBase: hasPlayers ? prev.playersLeftOnBase : undefined,
-    }));
+  const selectRunsScored = (runs: number) => {
+    setWizard(prev => ({ ...prev, runsScored: runs }));
   };
 
   const isWizardComplete =
     !!wizard.outcomeCategory &&
     !!wizard.outcomeType &&
     (!showExtraBaseHitDetail || !!wizard.outcomeDetail) &&
-    (!showLeftOnBaseQuestion ||
-      wizard.hasPlayersLeftOnBase === false ||
-      (wizard.hasPlayersLeftOnBase === true && wizard.playersLeftOnBase !== undefined && wizard.playersLeftOnBase >= 0));
+    (!showRunsScoredDetail || wizard.runsScored !== undefined);
 
   const isFormComplete = isWizardComplete;
 
@@ -97,7 +92,7 @@ export default function Track() {
           outcomeCategory: wizard.outcomeCategory,
           outcomeType: wizard.outcomeType,
           outcomeDetail: wizard.outcomeDetail,
-          playersLeftOnBase: wizard.hasPlayersLeftOnBase ? wizard.playersLeftOnBase : undefined,
+          runsScored: wizard.runsScored,
           notes: notes || undefined,
         },
       },
@@ -109,6 +104,7 @@ export default function Track() {
           });
           resetForm();
           setAcknowledgedInning(undefined);
+          setLobAwaitingCount(false);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
@@ -131,6 +127,31 @@ export default function Track() {
   const displayInningNumber = waitingForNextInning ? (inning?.inningNumber ?? 1) + 1 : inning?.inningNumber ?? 1;
   const displayOuts = waitingForNextInning ? 0 : inning?.outs ?? 0;
   const displayDelta = waitingForNextInning ? 0 : inning?.inningDelta ?? 0;
+
+  const lastAtBat = inning?.atBats[inning.atBats.length - 1];
+  const needsLobAnswer = showCompletedSummary && !!lastAtBat && lastAtBat.playersLeftOnBase === undefined;
+
+  const submitLob = (count: number) => {
+    if (!lastAtBat) return;
+    updateEntry.mutate(
+      { id: lastAtBat.id, data: { playersLeftOnBase: count } },
+      {
+        onSuccess: () => {
+          setLobAwaitingCount(false);
+          queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
+        },
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to record runners left on base.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const startNextInning = () => {
     if (inning) setAcknowledgedInning(inning.inningNumber);
@@ -215,11 +236,15 @@ export default function Track() {
                   </div>
                   <div className="bg-muted/50 rounded-sm p-3">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
-                    <div className="font-mono font-bold text-xl">{inning.runsScored}</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
+                      {inning.runsScored}
+                    </div>
                   </div>
                   <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">LOB</div>
-                    <div className="font-mono font-bold text-xl">{inning.playersLeftOnBase}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runners Left On Base</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-players-left-on-base">
+                      {needsLobAnswer ? "—" : inning.playersLeftOnBase}
+                    </div>
                   </div>
                 </div>
                 <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
@@ -232,169 +257,192 @@ export default function Track() {
                     {inning.inningDelta}
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  onClick={startNextInning}
-                  className="w-full rounded-none font-bold uppercase tracking-wider"
-                  data-testid="btn-start-next-inning"
-                >
-                  Start Next Inning
-                </Button>
+
+                {needsLobAnswer ? (
+                  <div className="border-2 border-primary/30 rounded-sm p-4 space-y-3" data-testid="lob-question">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
+                      Were there any runners left on base?
+                    </Label>
+                    {!lobAwaitingCount ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <button
+                          type="button"
+                          onClick={() => submitLob(0)}
+                          disabled={updateEntry.isPending}
+                          data-testid="btn-lob-inning-no"
+                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
+                        >
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLobAwaitingCount(true)}
+                          disabled={updateEntry.isPending}
+                          data-testid="btn-lob-inning-yes"
+                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
+                        >
+                          Yes
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">How many runners were left on base?</Label>
+                        <div className="grid grid-cols-3 gap-4">
+                          {[1, 2, 3].map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => submitLob(n)}
+                              disabled={updateEntry.isPending}
+                              data-testid={`btn-lob-count-${n}`}
+                              className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={startNextInning}
+                    className="w-full rounded-none font-bold uppercase tracking-wider"
+                    data-testid="btn-start-next-inning"
+                  >
+                    Start Next Inning
+                  </Button>
+                )}
               </div>
             ) : (
               <>
-            <div className="space-y-4">
-              <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => selectCategory("defense")}
-                  data-testid="btn-category-defense"
-                  className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
-                    wizard.outcomeCategory === "defense"
-                      ? "border-success bg-success/10 text-success"
-                      : "border-border hover:border-success/50"
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Defense
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectCategory("offense")}
-                  data-testid="btn-category-offense"
-                  className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
-                    wizard.outcomeCategory === "offense"
-                      ? "border-destructive bg-destructive/10 text-destructive"
-                      : "border-border hover:border-destructive/50"
-                  }`}
-                >
-                  <Swords className="w-4 h-4" />
-                  Offense
-                </button>
-              </div>
-            </div>
-
-            {wizard.outcomeCategory && (
-              <div className="space-y-2">
-                <Label className="uppercase tracking-wider text-xs text-muted-foreground">
-                  Step 2 — {wizard.outcomeCategory === "defense" ? "Defensive" : "Offensive"} Outcome
-                </Label>
-                <Select
-                  onValueChange={v => selectOutcomeType(v as OutcomeType)}
-                  value={wizard.outcomeType}
-                >
-                  <SelectTrigger data-testid="select-outcome-type" className="rounded-sm">
-                    <SelectValue placeholder="Select specific outcome" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {outcomesForCategory(wizard.outcomeCategory).map(o => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {showExtraBaseHitDetail && (
-              <div className="space-y-2">
-                <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — Extra Base Hit Detail</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => selectOutcomeDetail("double")}
-                    data-testid="btn-detail-double"
-                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                      wizard.outcomeDetail === "double" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    Double
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectOutcomeDetail("triple")}
-                    data-testid="btn-detail-triple"
-                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                      wizard.outcomeDetail === "triple" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    Triple
-                  </button>
+                <div className="space-y-4">
+                  <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => selectCategory("defense")}
+                      data-testid="btn-category-defense"
+                      className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
+                        wizard.outcomeCategory === "defense"
+                          ? "border-success bg-success/10 text-success"
+                          : "border-border hover:border-success/50"
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Defense
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCategory("offense")}
+                      data-testid="btn-category-offense"
+                      className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
+                        wizard.outcomeCategory === "offense"
+                          ? "border-destructive bg-destructive/10 text-destructive"
+                          : "border-border hover:border-destructive/50"
+                      }`}
+                    >
+                      <Swords className="w-4 h-4" />
+                      Offense
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {showLeftOnBaseQuestion && (
-              <div className="space-y-3">
-                <Label className="uppercase tracking-wider text-xs text-muted-foreground">Players left on base?</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => selectHasPlayersLeftOnBase(true)}
-                    data-testid="btn-lob-yes"
-                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                      wizard.hasPlayersLeftOnBase === true ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectHasPlayersLeftOnBase(false)}
-                    data-testid="btn-lob-no"
-                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                      wizard.hasPlayersLeftOnBase === false ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    No
-                  </button>
-                </div>
-                {wizard.hasPlayersLeftOnBase === true && (
-                  <div className="space-y-2 pt-1">
-                    <Label>How many?</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={3}
-                      className="font-mono rounded-sm w-32"
-                      value={wizard.playersLeftOnBase ?? ""}
-                      onChange={e =>
-                        setWizard(prev => ({
-                          ...prev,
-                          playersLeftOnBase: e.target.value === "" ? undefined : Number(e.target.value),
-                        }))
-                      }
-                      data-testid="input-players-left-on-base"
-                    />
+                {wizard.outcomeCategory && (
+                  <div className="space-y-2">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
+                      Step 2 — {wizard.outcomeCategory === "defense" ? "Defensive" : "Offensive"} Outcome
+                    </Label>
+                    <Select
+                      onValueChange={v => selectOutcomeType(v as OutcomeType)}
+                      value={wizard.outcomeType}
+                    >
+                      <SelectTrigger data-testid="select-outcome-type" className="rounded-sm">
+                        <SelectValue placeholder="Select specific outcome" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {outcomesForCategory(wizard.outcomeCategory).map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
-              </div>
-            )}
 
-            <Separator />
+                {showExtraBaseHitDetail && (
+                  <div className="space-y-2">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — Extra Base Hit Detail</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => selectOutcomeDetail("double")}
+                        data-testid="btn-detail-double"
+                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                          wizard.outcomeDetail === "double" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        Double
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectOutcomeDetail("triple")}
+                        data-testid="btn-detail-triple"
+                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                          wizard.outcomeDetail === "triple" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        Triple
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            <div className="space-y-2">
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                placeholder="Any mechanical or situational observations..."
-                className="resize-none rounded-sm"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                data-testid="input-notes"
-              />
-            </div>
+                {showRunsScoredDetail && (
+                  <div className="space-y-2">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — How Many Runs Scored?</Label>
+                    <div className="grid grid-cols-4 gap-4">
+                      {[1, 2, 3, 4].map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => selectRunsScored(n)}
+                          data-testid={`btn-runs-scored-${n}`}
+                          className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                            wizard.runsScored === n ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            <Button
-              type="button"
-              onClick={onSubmit}
-              className="w-full rounded-none font-bold uppercase tracking-wider"
-              disabled={!isFormComplete || createEntry.isPending}
-              data-testid="btn-submit-entry"
-            >
-              {createEntry.isPending ? "Logging..." : "Log PA Entry"}
-            </Button>
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label>Notes (Optional)</Label>
+                  <Textarea
+                    placeholder="Any mechanical or situational observations..."
+                    className="resize-none rounded-sm"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    data-testid="input-notes"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={onSubmit}
+                  className="w-full rounded-none font-bold uppercase tracking-wider"
+                  disabled={!isFormComplete || createEntry.isPending}
+                  data-testid="btn-submit-entry"
+                >
+                  {createEntry.isPending ? "Logging..." : "Log PA Entry"}
+                </Button>
               </>
             )}
           </CardContent>
@@ -417,6 +465,7 @@ export default function Track() {
                   Delta: {recentEntry.delta > 0 ? "+" : ""}
                   {recentEntry.delta}
                 </span>
+                {recentEntry.runsScored !== undefined && <span>Runs: {recentEntry.runsScored}</span>}
                 {recentEntry.playersLeftOnBase !== undefined && <span>LOB: {recentEntry.playersLeftOnBase}</span>}
               </div>
             </AlertDescription>

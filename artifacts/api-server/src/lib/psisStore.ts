@@ -90,7 +90,7 @@ export function computeInningState(entries: Entry[], inningNumber: number): Inni
     goodCount: atBats.reduce((sum, e) => sum + e.goodCount, 0),
     badCount: atBats.reduce((sum, e) => sum + e.badCount, 0),
     inningDelta: atBats.reduce((sum, e) => sum + e.delta, 0),
-    runsScored: atBats.filter(e => e.outcomeType === "run_scored").length,
+    runsScored: atBats.reduce((sum, e) => sum + (e.outcomeType === "run_scored" ? (e.runsScored ?? 1) : 0), 0),
     playersLeftOnBase: atBats.reduce((sum, e) => sum + (e.playersLeftOnBase ?? 0), 0),
     atBats,
   };
@@ -162,4 +162,15 @@ export async function appendEntry(entry: Entry): Promise<Entry> {
   entries.push(entry);
   await writeEntries(entries);
   return entry;
+}
+
+export async function updateEntry(id: string, patch: Partial<Pick<Entry, "playersLeftOnBase">>): Promise<Entry | undefined> {
+  const entries = await readEntries();
+  const index = entries.findIndex(e => e.id === id);
+  if (index === -1) return undefined;
+
+  const updated = { ...entries[index], ...patch };
+  entries[index] = updated;
+  await writeEntries(entries);
+  return updated;
 }

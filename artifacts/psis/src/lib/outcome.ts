@@ -3,33 +3,27 @@ import type { Entry, OutcomeCategory, OutcomeType, OutcomeDetail } from "@worksp
 export interface OutcomeOption {
   value: OutcomeType;
   label: string;
-  asksLeftOnBase: boolean;
 }
 
 export const DEFENSE_OUTCOMES: OutcomeOption[] = [
-  { value: "strikeout", label: "Strikeout", asksLeftOnBase: false },
-  { value: "fly_out", label: "Fly Out", asksLeftOnBase: true },
-  { value: "ground_out", label: "Ground Out", asksLeftOnBase: true },
-  { value: "infield_catch", label: "Infield Catch", asksLeftOnBase: false },
-  { value: "double_play", label: "Double Play", asksLeftOnBase: true },
-  { value: "triple_play", label: "Triple Play", asksLeftOnBase: true },
+  { value: "strikeout", label: "Strikeout" },
+  { value: "fly_out", label: "Fly Out" },
+  { value: "ground_out", label: "Ground Out" },
+  { value: "infield_catch", label: "Infield Catch" },
+  { value: "double_play", label: "Double Play" },
+  { value: "triple_play", label: "Triple Play" },
 ];
 
 export const OFFENSE_OUTCOMES: OutcomeOption[] = [
-  { value: "run_scored", label: "Run Scored", asksLeftOnBase: false },
-  { value: "hit", label: "Hit", asksLeftOnBase: false },
-  { value: "walk", label: "Walk", asksLeftOnBase: false },
-  { value: "home_run", label: "Home Run", asksLeftOnBase: false },
-  { value: "extra_base_hit", label: "Extra Base Hit", asksLeftOnBase: false },
+  { value: "run_scored", label: "Run Scored" },
+  { value: "hit", label: "Hit" },
+  { value: "walk", label: "Walk" },
+  { value: "home_run", label: "Home Run" },
+  { value: "extra_base_hit", label: "Extra Base Hit" },
 ];
 
 export function outcomesForCategory(category: OutcomeCategory): OutcomeOption[] {
   return category === "defense" ? DEFENSE_OUTCOMES : OFFENSE_OUTCOMES;
-}
-
-export function outcomeAsksLeftOnBase(category: OutcomeCategory | undefined, type: OutcomeType | undefined): boolean {
-  if (category !== "defense" || !type) return false;
-  return DEFENSE_OUTCOMES.find(o => o.value === type)?.asksLeftOnBase ?? false;
 }
 
 function labelFor(type: OutcomeType | string): string {

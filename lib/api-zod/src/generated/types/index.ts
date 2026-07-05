@@ -19,3 +19,4 @@ export * from './outcomeType';
 export * from './resultCategory';
 export * from './resultOutcome';
 export * from './sequenceStat';
+export * from './updateEntryInput';
