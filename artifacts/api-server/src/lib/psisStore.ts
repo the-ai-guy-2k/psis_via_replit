@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Entry, ResultOutcome, OutcomeCategory, OutcomeType } from "@workspace/api-zod";
+import type { Entry, ResultOutcome, OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-zod";
 import { logger } from "./logger";
 
 const GOOD_RESULTS: ResultOutcome[] = [
@@ -27,17 +27,34 @@ export function resultCategoryForOutcomeCategory(outcomeCategory: OutcomeCategor
   return outcomeCategory === "defense" ? "good" : "bad";
 }
 
+// Flat outs mapping for outcome types that don't branch further (or whose
+// legacy top-level value predates the ground_out -> outcomeDetail branch).
 const OUTS_BY_DEFENSE_OUTCOME: Partial<Record<OutcomeType, number>> = {
   strikeout: 1,
   fly_out: 1,
-  ground_out: 1,
-  infield_catch: 1,
+  infield_out: 1,
+  infield_catch: 1, // legacy alias for infield_out
+  double_play: 2, // legacy top-level value, predates ground_out branching
+  triple_play: 3, // legacy top-level value, predates ground_out branching
+};
+
+// Outs for a ground_out depend on its outcomeDetail (the EABR click flow's
+// "play result" question), not a flat per-type value.
+const OUTS_BY_GROUND_OUT_DETAIL: Partial<Record<OutcomeDetail, number>> = {
+  single_play: 1,
   double_play: 2,
   triple_play: 3,
 };
 
-export function rawOutsForOutcome(outcomeCategory: OutcomeCategory, outcomeType: OutcomeType): number {
+export function rawOutsForOutcome(
+  outcomeCategory: OutcomeCategory,
+  outcomeType: OutcomeType,
+  outcomeDetail?: OutcomeDetail,
+): number {
   if (outcomeCategory !== "defense") return 0;
+  if (outcomeType === "ground_out") {
+    return (outcomeDetail && OUTS_BY_GROUND_OUT_DETAIL[outcomeDetail]) ?? 1;
+  }
   return OUTS_BY_DEFENSE_OUTCOME[outcomeType] ?? 0;
 }
 

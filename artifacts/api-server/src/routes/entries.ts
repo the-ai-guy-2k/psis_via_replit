@@ -7,6 +7,7 @@ import {
   CreateEntryResponse,
   UpdateEntryResponse,
 } from "@workspace/api-zod";
+import type { OutcomeType, OutcomeDetail } from "@workspace/api-zod";
 import {
   appendEntry,
   listEntries,
@@ -35,13 +36,27 @@ router.post("/entries", async (req, res): Promise<void> => {
 
   const input = parsed.data;
 
-  if (input.outcomeType === "extra_base_hit" && !input.outcomeDetail) {
-    res.status(400).json({ message: "outcomeDetail (double or triple) is required for extra_base_hit" });
-    return;
-  }
+  // Follow-up detail question per outcome type in the EABR progressive click
+  // flow: ground_out asks the play result, fly_out asks the catch location,
+  // hit asks the hit type. extra_base_hit is kept for backward compatibility
+  // with entries created before ground_out/hit branching existed.
+  const VALID_DETAILS_BY_TYPE: Partial<Record<OutcomeType, OutcomeDetail[]>> = {
+    ground_out: ["single_play", "double_play", "triple_play"],
+    fly_out: ["infield", "outfield"],
+    hit: ["single", "double", "triple", "home_run"],
+    extra_base_hit: ["double", "triple"],
+  };
 
-  if (input.outcomeDetail && input.outcomeType !== "extra_base_hit") {
-    res.status(400).json({ message: "outcomeDetail is only valid for extra_base_hit" });
+  const allowedDetails = VALID_DETAILS_BY_TYPE[input.outcomeType];
+  if (allowedDetails) {
+    if (!input.outcomeDetail || !allowedDetails.includes(input.outcomeDetail)) {
+      res.status(400).json({
+        message: `outcomeDetail is required for ${input.outcomeType} (one of: ${allowedDetails.join(", ")})`,
+      });
+      return;
+    }
+  } else if (input.outcomeDetail) {
+    res.status(400).json({ message: `outcomeDetail is not valid for outcomeType ${input.outcomeType}` });
     return;
   }
 
@@ -68,7 +83,7 @@ router.post("/entries", async (req, res): Promise<void> => {
   const existingEntries = await listEntries();
   const { inningNumber, currentOuts } = resolveInningForNewAtBat(existingEntries);
 
-  const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType);
+  const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType, input.outcomeDetail);
   const outsAdded = Math.min(rawOuts, 3 - currentOuts);
 
   const entry = {

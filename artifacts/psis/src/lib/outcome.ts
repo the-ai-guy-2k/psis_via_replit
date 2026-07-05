@@ -5,30 +5,75 @@ export interface OutcomeOption {
   label: string;
 }
 
+export interface DetailOption {
+  value: OutcomeDetail;
+  label: string;
+}
+
+/** Top-level defense options shown after clicking "Defense" in the EABR click flow. */
 export const DEFENSE_OUTCOMES: OutcomeOption[] = [
   { value: "strikeout", label: "Strikeout" },
   { value: "fly_out", label: "Fly Out" },
   { value: "ground_out", label: "Ground Out" },
-  { value: "infield_catch", label: "Infield Catch" },
-  { value: "double_play", label: "Double Play" },
-  { value: "triple_play", label: "Triple Play" },
+  { value: "infield_out", label: "Infield Out" },
 ];
 
+/** Top-level offense options shown after clicking "Offense" in the EABR click flow. */
 export const OFFENSE_OUTCOMES: OutcomeOption[] = [
-  { value: "run_scored", label: "Run Scored" },
   { value: "hit", label: "Hit" },
   { value: "walk", label: "Walk" },
-  { value: "home_run", label: "Home Run" },
-  { value: "extra_base_hit", label: "Extra Base Hit" },
+  { value: "run_scored", label: "Run Scored" },
 ];
 
 export function outcomesForCategory(category: OutcomeCategory): OutcomeOption[] {
   return category === "defense" ? DEFENSE_OUTCOMES : OFFENSE_OUTCOMES;
 }
 
-function labelFor(type: OutcomeType | string): string {
-  return type.replace(/_/g, " ");
+/** Follow-up "where was the catch made" options for Fly Out. */
+export const FLY_OUT_LOCATIONS: DetailOption[] = [
+  { value: "infield", label: "Infield" },
+  { value: "outfield", label: "Outfield" },
+];
+
+/** Follow-up "play result" options for Ground Out. */
+export const GROUND_OUT_RESULTS: DetailOption[] = [
+  { value: "single_play", label: "Single Play" },
+  { value: "double_play", label: "Double Play" },
+  { value: "triple_play", label: "Triple Play" },
+];
+
+/** Follow-up "hit type" options for Hit. */
+export const HIT_TYPES: DetailOption[] = [
+  { value: "single", label: "Single" },
+  { value: "double", label: "Double" },
+  { value: "triple", label: "Triple" },
+  { value: "home_run", label: "Home Run" },
+];
+
+/**
+ * Outcome types that require a follow-up click before the EABR (End of
+ * At-Bat Result) is reached and the entry can be saved.
+ */
+export function detailOptionsForOutcomeType(type: OutcomeType): DetailOption[] | undefined {
+  switch (type) {
+    case "fly_out":
+      return FLY_OUT_LOCATIONS;
+    case "ground_out":
+      return GROUND_OUT_RESULTS;
+    case "hit":
+      return HIT_TYPES;
+    default:
+      return undefined;
+  }
 }
+
+function labelFor(type: OutcomeType | OutcomeDetail | string): string {
+  return type
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export { labelFor as labelForOutcomeValue };
 
 /**
  * Produces a human-readable outcome label for an entry, supporting both

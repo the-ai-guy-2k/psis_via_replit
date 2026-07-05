@@ -1,0 +1,286 @@
+PSIS ACI — TRACKER EABR PROGRESSIVE CLICK FLOW
+
+MISSION
+
+Update the PSIS Tracker user experience so at the end of each at-bat, the user is guided through a progressive click flow.
+
+The user should not see all outcome choices at once.
+
+The user should only see the next relevant choice.
+
+==================================================
+CURRENT PROBLEM
+==================================================
+
+The current clicking experience exposes too many options too early.
+
+This creates friction and makes the Tracker feel like a form instead of a natural baseball workflow.
+
+==================================================
+REQUIRED UX FLOW
+==================================================
+
+At the end of an at-bat, the Tracker should show only:
+
+Outcome
+
+When the user clicks Outcome, show:
+
+- Defense
+- Offense
+
+==================================================
+DEFENSE FLOW
+==================================================
+
+If the user clicks Defense, show only defensive options.
+
+Defense options:
+
+- Strikeout
+- Fly Out
+- Ground Out
+- Infield Out
+
+The user continues clicking until the app reaches the final End of At-Bat Result.
+
+==================================================
+DEFENSE RESULT BRANCHES
+==================================================
+
+Strikeout
+
+- This is an EABR.
+- Save as final at-bat result.
+
+Fly Out
+
+- Ask where the catch was made.
+- After selection, this becomes the EABR.
+
+Ground Out
+
+- Ask play result:
+  - Single Play
+  - Double Play
+  - Triple Play
+- After selection, this becomes the EABR.
+
+Infield Out
+
+- This is an EABR.
+- Save as final at-bat result.
+
+==================================================
+OFFENSE FLOW
+==================================================
+
+If the user clicks Offense, show only offensive options.
+
+Offense options:
+
+- Hit
+- Walk
+- Run Scored
+
+==================================================
+OFFENSE RESULT BRANCHES
+==================================================
+
+Walk
+
+- This is an EABR.
+- Save as final at-bat result.
+
+Run Scored
+
+- Ask how many runs scored.
+- After value is entered, this becomes the EABR.
+
+Hit
+
+- Ask hit type:
+  - Single
+  - Double
+  - Triple
+  - Home Run
+- After selection, this becomes the EABR.
+
+==================================================
+EABR RULE
+==================================================
+
+EABR means End of At-Bat Result.
+
+Only after the user reaches an EABR should the app save the at-bat.
+
+Do not save partial selections.
+
+Examples:
+
+Outcome → Defense → Strikeout = EABR
+
+Outcome → Defense → Ground Out → Double Play = EABR
+
+Outcome → Offense → Hit → Triple = EABR
+
+Outcome → Offense → Run Scored → 2 runs = EABR
+
+==================================================
+UI REQUIREMENTS
+==================================================
+
+The UI should behave like a guided path.
+
+At each step, show:
+
+- Current selected path
+- Only the next valid options
+- Back / Reset option
+
+Example:
+
+Outcome
+
+click
+
+Outcome > Defense
+
+show defensive options
+
+click Ground Out
+
+Outcome > Defense > Ground Out
+
+show Single Play / Double Play / Triple Play
+
+click Double Play
+
+EABR reached
+
+save at-bat
+
+==================================================
+INNING LOGIC MUST REMAIN
+==================================================
+
+Keep the existing inning logic:
+
+- User enters at-bats until 3 outs.
+- At 3 outs, stop at-bat entry.
+- Ask if players were left on base.
+- Show End Inning button.
+- On End Inning, calculate and display final inning delta.
+- Reset Recent Log after delta is calculated.
+
+==================================================
+OUT COUNT LOGIC
+==================================================
+
+Strikeout = 1 out
+Fly Out = 1 out
+Infield Out = 1 out
+Ground Out → Single Play = 1 out
+Ground Out → Double Play = 2 outs
+Ground Out → Triple Play = 3 outs
+
+Offensive outcomes = 0 outs
+
+Do not allow outs to exceed 3.
+
+==================================================
+DELTA LOGIC
+==================================================
+
+Good outcomes:
+
+- Strikeout
+- Fly Out
+- Infield Out
+- Ground Out Single Play
+- Ground Out Double Play
+- Ground Out Triple Play
+
+Bad outcomes:
+
+- Walk
+- Hit Single
+- Hit Double
+- Hit Triple
+- Home Run
+- Run Scored
+
+Final inning delta:
+
+goodCount - badCount - runsScored
+
+==================================================
+RECENT LOG LOGIC
+==================================================
+
+Recent Log only shows entries for the active inning.
+
+After End Inning is clicked and delta is calculated:
+
+- Save inning summary
+- Clear Recent Log
+- Prepare for next inning
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Authentication
+- AI recommendations
+- Player database
+- Full game scoring
+- Base runner simulation
+- Cloud database
+- Advanced reports
+
+This ACI is only for improving the Tracker EABR click flow.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. User initially sees only Outcome.
+
+2. Clicking Outcome reveals only Defense / Offense.
+
+3. Clicking Defense reveals only defensive options.
+
+4. Clicking Offense reveals only offensive options.
+
+5. At-bat is saved only after EABR is reached.
+
+6. Ground Out branches to Single Play / Double Play / Triple Play.
+
+7. Hit branches to Single / Double / Triple / Home Run.
+
+8. Run Scored asks for number of runs.
+
+9. Inning logic still completes at 3 outs.
+
+10. End Inning confirmation still works.
+
+11. Final delta still calculates correctly.
+
+12. Recent Log resets after final inning delta is calculated.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- UI flow changes
+- Logic changes
+- Validation results
+- Any assumptions
+- PASS / PARTIAL PASS / FAIL

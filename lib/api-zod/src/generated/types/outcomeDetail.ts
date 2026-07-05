@@ -7,12 +7,19 @@
  */
 
 /**
- * Follow-up detail, currently only used for extra_base_hit
+ * Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double/triple only).
  */
 export type OutcomeDetail = typeof OutcomeDetail[keyof typeof OutcomeDetail];
 
 
 export const OutcomeDetail = {
+  single: 'single',
   double: 'double',
   triple: 'triple',
+  home_run: 'home_run',
+  infield: 'infield',
+  outfield: 'outfield',
+  single_play: 'single_play',
+  double_play: 'double_play',
+  triple_play: 'triple_play',
 } as const;

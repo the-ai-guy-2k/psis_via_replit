@@ -13,24 +13,29 @@ import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper, ChevronLeft, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { describeOutcome, outcomesForCategory } from "@/lib/outcome";
+import {
+  describeOutcome,
+  outcomesForCategory,
+  detailOptionsForOutcomeType,
+  labelForOutcomeValue,
+} from "@/lib/outcome";
 
 type WizardState = {
+  started: boolean;
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
   runsScored?: number;
 };
 
-const emptyWizard: WizardState = {};
+const emptyWizard: WizardState = { started: false };
 
 export default function Track() {
   const { toast } = useToast();
@@ -47,15 +52,24 @@ export default function Track() {
   const [lobHasPlayers, setLobHasPlayers] = useState<boolean | undefined>(undefined);
   const [lobCount, setLobCount] = useState<number | undefined>(undefined);
 
-  const showExtraBaseHitDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "extra_base_hit";
-  const showRunsScoredDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "run_scored";
+  // Outcome types that need a follow-up click before an EABR (End of At-Bat
+  // Result) is reached. Everything else (strikeout, infield_out, walk) is
+  // itself the EABR the instant it's clicked.
+  const detailOptions = wizard.outcomeType ? detailOptionsForOutcomeType(wizard.outcomeType) : undefined;
+  const needsDetail = !!detailOptions;
+  const needsRunsScored = wizard.outcomeType === "run_scored";
+
+  const startOutcome = () => {
+    setWizard({ started: true });
+  };
 
   const selectCategory = (category: OutcomeCategory) => {
-    setWizard({ outcomeCategory: category });
+    setWizard({ started: true, outcomeCategory: category });
   };
 
   const selectOutcomeType = (type: OutcomeType) => {
     setWizard(prev => ({
+      started: true,
       outcomeCategory: prev.outcomeCategory,
       outcomeType: type,
     }));
@@ -69,18 +83,41 @@ export default function Track() {
     setWizard(prev => ({ ...prev, runsScored: runs }));
   };
 
-  const isWizardComplete =
+  // Reached only once every required click in the path has been made — the
+  // "EABR" (End of At-Bat Result). Nothing is ever saved before this.
+  const isEabrReached =
     !!wizard.outcomeCategory &&
     !!wizard.outcomeType &&
-    (!showExtraBaseHitDetail || !!wizard.outcomeDetail) &&
-    (!showRunsScoredDetail || wizard.runsScored !== undefined);
+    (!needsDetail || !!wizard.outcomeDetail) &&
+    (!needsRunsScored || wizard.runsScored !== undefined);
 
-  const isFormComplete = isWizardComplete;
+  const isFormComplete = isEabrReached;
 
   const resetForm = () => {
     setNotes("");
     setWizard(emptyWizard);
   };
+
+  const goBack = () => {
+    setWizard(prev => {
+      if (prev.outcomeDetail !== undefined || prev.runsScored !== undefined) {
+        return { started: true, outcomeCategory: prev.outcomeCategory, outcomeType: prev.outcomeType };
+      }
+      if (prev.outcomeType !== undefined) {
+        return { started: true, outcomeCategory: prev.outcomeCategory };
+      }
+      if (prev.outcomeCategory !== undefined) {
+        return { started: true };
+      }
+      return { started: false };
+    });
+  };
+
+  const breadcrumb: string[] = ["Outcome"];
+  if (wizard.outcomeCategory) breadcrumb.push(wizard.outcomeCategory === "defense" ? "Defense" : "Offense");
+  if (wizard.outcomeType) breadcrumb.push(labelForOutcomeValue(wizard.outcomeType));
+  if (wizard.outcomeDetail) breadcrumb.push(labelForOutcomeValue(wizard.outcomeDetail));
+  if (wizard.runsScored !== undefined) breadcrumb.push(`${wizard.runsScored} Run${wizard.runsScored === 1 ? "" : "s"}`);
 
   const onSubmit = () => {
     if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType) {
@@ -391,92 +428,140 @@ export default function Track() {
               )
             ) : (
               <>
-                <div className="space-y-4">
-                  <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => selectCategory("defense")}
-                      data-testid="btn-category-defense"
-                      className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
-                        wizard.outcomeCategory === "defense"
-                          ? "border-success bg-success/10 text-success"
-                          : "border-border hover:border-success/50"
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      Defense
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => selectCategory("offense")}
-                      data-testid="btn-category-offense"
-                      className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
-                        wizard.outcomeCategory === "offense"
-                          ? "border-destructive bg-destructive/10 text-destructive"
-                          : "border-border hover:border-destructive/50"
-                      }`}
-                    >
-                      <Swords className="w-4 h-4" />
-                      Offense
-                    </button>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap" data-testid="outcome-breadcrumb">
+                    {breadcrumb.map((crumb, i) => (
+                      <span key={i} className="flex items-center gap-1.5">
+                        {i > 0 && <span className="text-muted-foreground">›</span>}
+                        <span
+                          className={`text-xs uppercase tracking-wider font-semibold ${
+                            i === breadcrumb.length - 1 ? "text-foreground" : "text-muted-foreground"
+                          }`}
+                        >
+                          {crumb}
+                        </span>
+                      </span>
+                    ))}
+                    {isEabrReached && (
+                      <Badge className="ml-1 rounded-sm bg-success/10 text-success border-success" data-testid="badge-eabr-reached">
+                        EABR Reached
+                      </Badge>
+                    )}
                   </div>
+                  {wizard.started && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={goBack}
+                        className="rounded-sm"
+                        data-testid="btn-outcome-back"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        Back
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={resetForm}
+                        className="rounded-sm"
+                        data-testid="btn-outcome-reset"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                        Reset
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {wizard.outcomeCategory && (
-                  <div className="space-y-2">
-                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
-                      Step 2 — {wizard.outcomeCategory === "defense" ? "Defensive" : "Offensive"} Outcome
-                    </Label>
-                    <Select
-                      onValueChange={v => selectOutcomeType(v as OutcomeType)}
-                      value={wizard.outcomeType}
-                    >
-                      <SelectTrigger data-testid="select-outcome-type" className="rounded-sm">
-                        <SelectValue placeholder="Select specific outcome" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {outcomesForCategory(wizard.outcomeCategory).map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {!wizard.started && (
+                  <button
+                    type="button"
+                    onClick={startOutcome}
+                    data-testid="btn-start-outcome"
+                    className="w-full border-2 border-dashed rounded-sm py-8 font-bold uppercase tracking-wider text-lg transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
+                  >
+                    Outcome
+                  </button>
                 )}
 
-                {showExtraBaseHitDetail && (
+                {wizard.started && !wizard.outcomeCategory && (
                   <div className="space-y-2">
-                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — Extra Base Hit Detail</Label>
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">Defense or Offense?</Label>
                     <div className="grid grid-cols-2 gap-4">
                       <button
                         type="button"
-                        onClick={() => selectOutcomeDetail("double")}
-                        data-testid="btn-detail-double"
-                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                          wizard.outcomeDetail === "double" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                        }`}
+                        onClick={() => selectCategory("defense")}
+                        data-testid="btn-category-defense"
+                        className="flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors border-border hover:border-success/50 hover:bg-success/5"
                       >
-                        Double
+                        <ShieldCheck className="w-4 h-4" />
+                        Defense
                       </button>
                       <button
                         type="button"
-                        onClick={() => selectOutcomeDetail("triple")}
-                        data-testid="btn-detail-triple"
-                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                          wizard.outcomeDetail === "triple" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                        }`}
+                        onClick={() => selectCategory("offense")}
+                        data-testid="btn-category-offense"
+                        className="flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors border-border hover:border-destructive/50 hover:bg-destructive/5"
                       >
-                        Triple
+                        <Swords className="w-4 h-4" />
+                        Offense
                       </button>
                     </div>
                   </div>
                 )}
 
-                {showRunsScoredDetail && (
+                {wizard.outcomeCategory && !wizard.outcomeType && (
                   <div className="space-y-2">
-                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — How Many Runs Scored?</Label>
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
+                      {wizard.outcomeCategory === "defense" ? "Defensive" : "Offensive"} Outcome
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {outcomesForCategory(wizard.outcomeCategory).map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => selectOutcomeType(o.value)}
+                          data-testid={`btn-outcome-type-${o.value}`}
+                          className="border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {wizard.outcomeType && detailOptions && !wizard.outcomeDetail && (
+                  <div className="space-y-2">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
+                      {wizard.outcomeType === "fly_out"
+                        ? "Where Was The Catch Made?"
+                        : wizard.outcomeType === "ground_out"
+                          ? "Play Result?"
+                          : "Hit Type?"}
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {detailOptions.map(d => (
+                        <button
+                          key={d.value}
+                          type="button"
+                          onClick={() => selectOutcomeDetail(d.value)}
+                          data-testid={`btn-detail-${d.value}`}
+                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {needsRunsScored && wizard.runsScored === undefined && (
+                  <div className="space-y-2">
+                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">How Many Runs Scored?</Label>
                     <div className="grid grid-cols-4 gap-4">
                       {[1, 2, 3, 4].map(n => (
                         <button
@@ -484,9 +569,7 @@ export default function Track() {
                           type="button"
                           onClick={() => selectRunsScored(n)}
                           data-testid={`btn-runs-scored-${n}`}
-                          className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
-                            wizard.runsScored === n ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                          }`}
+                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
                         >
                           {n}
                         </button>
@@ -495,28 +578,32 @@ export default function Track() {
                   </div>
                 )}
 
-                <Separator />
+                {isEabrReached && (
+                  <>
+                    <Separator />
 
-                <div className="space-y-2">
-                  <Label>Notes (Optional)</Label>
-                  <Textarea
-                    placeholder="Any mechanical or situational observations..."
-                    className="resize-none rounded-sm"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    data-testid="input-notes"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label>Notes (Optional)</Label>
+                      <Textarea
+                        placeholder="Any mechanical or situational observations..."
+                        className="resize-none rounded-sm"
+                        value={notes}
+                        onChange={e => setNotes(e.target.value)}
+                        data-testid="input-notes"
+                      />
+                    </div>
 
-                <Button
-                  type="button"
-                  onClick={onSubmit}
-                  className="w-full rounded-none font-bold uppercase tracking-wider"
-                  disabled={!isFormComplete || createEntry.isPending}
-                  data-testid="btn-submit-entry"
-                >
-                  {createEntry.isPending ? "Logging..." : "Log PA Entry"}
-                </Button>
+                    <Button
+                      type="button"
+                      onClick={onSubmit}
+                      className="w-full rounded-none font-bold uppercase tracking-wider"
+                      disabled={!isFormComplete || createEntry.isPending}
+                      data-testid="btn-submit-entry"
+                    >
+                      {createEntry.isPending ? "Logging..." : "Log PA Entry"}
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </CardContent>

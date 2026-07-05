@@ -171,11 +171,18 @@ components:
       description: Top-level branch of the at-bat outcome wizard
     OutcomeType:
       type: string
-      description: Specific outcome selected within a defense or offense branch
+      description: >-
+        Specific outcome selected within a defense or offense branch.
+        infield_catch, double_play, triple_play, home_run, and extra_base_hit
+        are legacy top-level values retained only so pre-EABR-flow entries
+        keep validating; the progressive click flow now produces double_play
+        and triple_play as an outcomeDetail of ground_out, and home_run as an
+        outcomeDetail of hit.
       enum:
         - strikeout
         - fly_out
         - ground_out
+        - infield_out
         - infield_catch
         - double_play
         - triple_play
@@ -186,8 +193,20 @@ components:
         - extra_base_hit
     OutcomeDetail:
       type: string
-      description: Follow-up detail, currently only used for extra_base_hit
-      enum: [double, triple]
+      description: >-
+        Follow-up detail for outcome types that branch further: fly_out
+        (catch location), ground_out (play result), hit (hit type), and the
+        legacy extra_base_hit (double/triple only).
+      enum:
+        - single
+        - double
+        - triple
+        - home_run
+        - infield
+        - outfield
+        - single_play
+        - double_play
+        - triple_play
     CreateEntryInput:
       type: object
       properties:

@@ -7,7 +7,7 @@
  */
 
 /**
- * Specific outcome selected within a defense or offense branch
+ * Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.
  */
 export type OutcomeType = typeof OutcomeType[keyof typeof OutcomeType];
 
@@ -16,6 +16,7 @@ export const OutcomeType = {
   strikeout: 'strikeout',
   fly_out: 'fly_out',
   ground_out: 'ground_out',
+  infield_out: 'infield_out',
   infield_catch: 'infield_catch',
   double_play: 'double_play',
   triple_play: 'triple_play',
