@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Entry, ResultOutcome, OutcomeCategory } from "@workspace/api-zod";
+import type { Entry, ResultOutcome, OutcomeCategory, OutcomeType } from "@workspace/api-zod";
 import { logger } from "./logger";
 
 const GOOD_RESULTS: ResultOutcome[] = [
@@ -25,6 +25,103 @@ export function resultCategoryFor(result: ResultOutcome): "good" | "bad" {
 
 export function resultCategoryForOutcomeCategory(outcomeCategory: OutcomeCategory): "good" | "bad" {
   return outcomeCategory === "defense" ? "good" : "bad";
+}
+
+const OUTS_BY_DEFENSE_OUTCOME: Partial<Record<OutcomeType, number>> = {
+  strikeout: 1,
+  fly_out: 1,
+  ground_out: 1,
+  infield_catch: 1,
+  double_play: 2,
+  triple_play: 3,
+};
+
+export function rawOutsForOutcome(outcomeCategory: OutcomeCategory, outcomeType: OutcomeType): number {
+  if (outcomeCategory !== "defense") return 0;
+  return OUTS_BY_DEFENSE_OUTCOME[outcomeType] ?? 0;
+}
+
+export interface InningState {
+  inningNumber: number;
+  outs: number;
+  completed: boolean;
+  totalAtBats: number;
+  goodCount: number;
+  badCount: number;
+  inningDelta: number;
+  runsScored: number;
+  playersLeftOnBase: number;
+  atBats: Entry[];
+}
+
+function emptyInningState(inningNumber: number): InningState {
+  return {
+    inningNumber,
+    outs: 0,
+    completed: false,
+    totalAtBats: 0,
+    goodCount: 0,
+    badCount: 0,
+    inningDelta: 0,
+    runsScored: 0,
+    playersLeftOnBase: 0,
+    atBats: [],
+  };
+}
+
+/**
+ * Returns the state of a specific inning, computed from stored entries — no
+ * separate "current inning" record is persisted.
+ */
+export function computeInningState(entries: Entry[], inningNumber: number): InningState {
+  const atBats = entries
+    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber === inningNumber)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  if (atBats.length === 0) return emptyInningState(inningNumber);
+
+  const outs = atBats.reduce((sum, e) => sum + (e.outsAdded ?? 0), 0);
+
+  return {
+    inningNumber,
+    outs,
+    completed: outs >= 3,
+    totalAtBats: atBats.length,
+    goodCount: atBats.reduce((sum, e) => sum + e.goodCount, 0),
+    badCount: atBats.reduce((sum, e) => sum + e.badCount, 0),
+    inningDelta: atBats.reduce((sum, e) => sum + e.delta, 0),
+    runsScored: atBats.filter(e => e.outcomeType === "run_scored").length,
+    playersLeftOnBase: atBats.reduce((sum, e) => sum + (e.playersLeftOnBase ?? 0), 0),
+    atBats,
+  };
+}
+
+/**
+ * Derives the state of the most recently played inning, for display —
+ * including once it reaches 3 outs and is complete. Entries created before
+ * inning tracking existed (no `inningNumber`) are ignored, so a fresh inning
+ * 1 starts once the first inning-tracked at-bat is logged.
+ */
+export function computeLatestInningState(entries: Entry[]): InningState {
+  const trackedInningNumbers = entries
+    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber !== undefined)
+    .map(e => e.inningNumber);
+
+  if (trackedInningNumbers.length === 0) return emptyInningState(1);
+
+  const latestInningNumber = Math.max(...trackedInningNumbers);
+  return computeInningState(entries, latestInningNumber);
+}
+
+/**
+ * Resolves which inning (and current out count) a new at-bat should be
+ * recorded against, auto-advancing past a just-completed inning.
+ */
+export function resolveInningForNewAtBat(entries: Entry[]): { inningNumber: number; currentOuts: number } {
+  const latest = computeLatestInningState(entries);
+  return latest.completed
+    ? { inningNumber: latest.inningNumber + 1, currentOuts: 0 }
+    : { inningNumber: latest.inningNumber, currentOuts: latest.outs };
 }
 
 async function ensureDataFile(): Promise<void> {

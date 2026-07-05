@@ -24,7 +24,8 @@ import type {
   DashboardSummary,
   Entry,
   ErrorResponse,
-  HealthStatus
+  HealthStatus,
+  InningState
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -344,6 +345,83 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCurrentInningUrl = () => {
+
+
+
+
+  return `/api/innings/current`
+}
+
+/**
+ * @summary Get the active (or most recently completed) inning's state
+ */
+export const getCurrentInning = async ( options?: RequestInit): Promise<InningState> => {
+
+  return customFetch<InningState>(getGetCurrentInningUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCurrentInningQueryKey = () => {
+    return [
+    `/api/innings/current`
+    ] as const;
+    }
+
+
+export const getGetCurrentInningQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentInning>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentInning>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCurrentInningQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentInning>>> = ({ signal }) => getCurrentInning({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCurrentInning>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCurrentInningQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentInning>>>
+export type GetCurrentInningQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the active (or most recently completed) inning's state
+ */
+
+export function useGetCurrentInning<TData = Awaited<ReturnType<typeof getCurrentInning>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentInning>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCurrentInningQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

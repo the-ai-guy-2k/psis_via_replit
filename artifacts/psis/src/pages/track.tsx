@@ -3,8 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateEntry,
   useListEntries,
+  useGetCurrentInning,
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
+  getGetCurrentInningQueryKey,
 } from "@workspace/api-client-react";
 import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, ShieldCheck, Swords } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { describeOutcome, outcomesForCategory, outcomeAsksLeftOnBase } from "@/lib/outcome";
 
@@ -36,10 +38,12 @@ export default function Track() {
   const queryClient = useQueryClient();
 
   const { data: entries, isLoading: entriesLoading } = useListEntries();
+  const { data: inning, isLoading: inningLoading } = useGetCurrentInning();
   const createEntry = useCreateEntry();
 
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
+  const [acknowledgedInning, setAcknowledgedInning] = useState<number | undefined>(undefined);
 
   const showLeftOnBaseQuestion = outcomeAsksLeftOnBase(wizard.outcomeCategory, wizard.outcomeType);
   const showExtraBaseHitDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "extra_base_hit";
@@ -104,8 +108,10 @@ export default function Track() {
             description: "At-bat outcome recorded successfully.",
           });
           resetForm();
+          setAcknowledgedInning(undefined);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
         },
         onError: () => {
           toast({
@@ -120,15 +126,123 @@ export default function Track() {
 
   const recentEntry = entries?.[0];
 
+  const waitingForNextInning = !!inning?.completed && acknowledgedInning === inning.inningNumber;
+  const showCompletedSummary = !!inning?.completed && !waitingForNextInning;
+  const displayInningNumber = waitingForNextInning ? (inning?.inningNumber ?? 1) + 1 : inning?.inningNumber ?? 1;
+  const displayOuts = waitingForNextInning ? 0 : inning?.outs ?? 0;
+  const displayDelta = waitingForNextInning ? 0 : inning?.inningDelta ?? 0;
+
+  const startNextInning = () => {
+    if (inning) setAcknowledgedInning(inning.inningNumber);
+  };
+
   return (
     <div className="grid lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-6">
         <Card className="rounded-none border-t-4 border-t-primary">
           <CardHeader className="bg-muted/50 pb-4">
-            <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
-            <CardDescription>Fast outcome entry — no pitcher, batter, or pitch sequence details required.</CardDescription>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
+                <CardDescription>Fast outcome entry — no pitcher, batter, or pitch sequence details required.</CardDescription>
+              </div>
+              {!inningLoading && (
+                <div
+                  className="flex items-center gap-4 bg-card border rounded-sm px-4 py-2"
+                  data-testid="inning-status-bar"
+                >
+                  <div className="text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
+                    <div className="font-mono font-bold text-lg" data-testid="text-inning-number">
+                      {displayInningNumber}
+                    </div>
+                  </div>
+                  <Separator orientation="vertical" className="h-8" />
+                  <div className="text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
+                    <div className="flex items-center gap-1 font-mono font-bold text-lg" data-testid="text-inning-outs">
+                      {displayOuts} / 3
+                      <span className="flex gap-0.5 ml-1">
+                        {[0, 1, 2].map(i => (
+                          <Circle
+                            key={i}
+                            className={`w-2.5 h-2.5 ${i < displayOuts ? "fill-destructive text-destructive" : "text-muted-foreground/30"}`}
+                          />
+                        ))}
+                      </span>
+                    </div>
+                  </div>
+                  <Separator orientation="vertical" className="h-8" />
+                  <div className="text-center">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning Δ</div>
+                    <div
+                      className={`font-mono font-bold text-lg ${displayDelta > 0 ? "text-success" : displayDelta < 0 ? "text-destructive" : ""}`}
+                      data-testid="text-inning-delta"
+                    >
+                      {displayDelta > 0 ? "+" : ""}
+                      {displayDelta}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
+            {showCompletedSummary && inning ? (
+              <div className="space-y-4" data-testid="inning-summary">
+                <div className="flex items-center gap-2 text-success">
+                  <PartyPopper className="w-5 h-5" />
+                  <span className="font-bold uppercase tracking-wider">Inning {inning.inningNumber} Complete</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">At-Bats</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-total-at-bats">
+                      {inning.totalAtBats}
+                    </div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Defensive Outs</div>
+                    <div className="font-mono font-bold text-xl">{inning.outs}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good</div>
+                    <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad</div>
+                    <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
+                    <div className="font-mono font-bold text-xl">{inning.runsScored}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">LOB</div>
+                    <div className="font-mono font-bold text-xl">{inning.playersLeftOnBase}</div>
+                  </div>
+                </div>
+                <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
+                  <span className="uppercase tracking-wider text-xs text-muted-foreground font-semibold">Final Inning Delta</span>
+                  <span
+                    className={`font-mono font-bold text-2xl ${inning.inningDelta > 0 ? "text-success" : inning.inningDelta < 0 ? "text-destructive" : ""}`}
+                    data-testid="summary-inning-delta"
+                  >
+                    {inning.inningDelta > 0 ? "+" : ""}
+                    {inning.inningDelta}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  onClick={startNextInning}
+                  className="w-full rounded-none font-bold uppercase tracking-wider"
+                  data-testid="btn-start-next-inning"
+                >
+                  Start Next Inning
+                </Button>
+              </div>
+            ) : (
+              <>
             <div className="space-y-4">
               <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
               <div className="grid grid-cols-2 gap-4">
@@ -281,6 +395,8 @@ export default function Track() {
             >
               {createEntry.isPending ? "Logging..." : "Log PA Entry"}
             </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -342,6 +458,12 @@ export default function Track() {
                         </>
                       )}
                       <span className="capitalize">{describeOutcome(entry)}</span>
+                      {entry.inningNumber !== undefined && (
+                        <>
+                          <span>•</span>
+                          <span>Inn {entry.inningNumber}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -354,6 +476,7 @@ export default function Track() {
                     <div className="font-mono text-xs mt-1 text-muted-foreground">
                       Δ {entry.delta > 0 ? "+" : ""}
                       {entry.delta}
+                      {entry.outsAdded ? ` · ${entry.outsAdded} out${entry.outsAdded > 1 ? "s" : ""}` : ""}
                     </div>
                   </div>
                 </div>

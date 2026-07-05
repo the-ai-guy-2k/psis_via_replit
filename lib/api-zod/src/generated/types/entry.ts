@@ -29,5 +29,9 @@ export interface Entry {
   badCount: number;
   strikeoutCount: number;
   delta: number;
+  /** Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed. */
+  inningNumber?: number;
+  /** Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs. */
+  outsAdded?: number;
   notes?: string;
 }

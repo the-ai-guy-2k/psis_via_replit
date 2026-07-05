@@ -5,7 +5,13 @@ import {
   ListEntriesResponse,
   CreateEntryResponse,
 } from "@workspace/api-zod";
-import { appendEntry, listEntries, resultCategoryForOutcomeCategory } from "../lib/psisStore";
+import {
+  appendEntry,
+  listEntries,
+  resultCategoryForOutcomeCategory,
+  rawOutsForOutcome,
+  resolveInningForNewAtBat,
+} from "../lib/psisStore";
 
 const router: IRouter = Router();
 
@@ -57,6 +63,12 @@ router.post("/entries", async (req, res): Promise<void> => {
   const badCount = resultCategory === "bad" ? 1 : 0;
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
 
+  const existingEntries = await listEntries();
+  const { inningNumber, currentOuts } = resolveInningForNewAtBat(existingEntries);
+
+  const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType);
+  const outsAdded = Math.min(rawOuts, 3 - currentOuts);
+
   const entry = {
     ...input,
     id: randomUUID(),
@@ -66,6 +78,8 @@ router.post("/entries", async (req, res): Promise<void> => {
     badCount,
     strikeoutCount,
     delta: goodCount - badCount,
+    inningNumber,
+    outsAdded,
   };
 
   await appendEntry(entry);

@@ -14,6 +14,8 @@ tags:
     description: Inning / pitch sequence entries
   - name: dashboard
     description: Dashboard aggregates
+  - name: innings
+    description: Inning-by-inning at-bat tracking
 paths:
   /healthz:
     get:
@@ -77,6 +79,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /innings/current:
+    get:
+      operationId: getCurrentInning
+      tags: [innings]
+      summary: Get the active (or most recently completed) inning's state
+      responses:
+        "200":
+          description: Current inning state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InningState"
 components:
   schemas:
     HealthStatus:
@@ -198,6 +212,12 @@ components:
           type: integer
         delta:
           type: integer
+        inningNumber:
+          type: integer
+          description: Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.
+        outsAdded:
+          type: integer
+          description: Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.
         notes:
           type: string
       required:
@@ -224,6 +244,46 @@ components:
         - totalDelta
         - averageDelta
         - occurrences
+    InningState:
+      type: object
+      properties:
+        inningNumber:
+          type: integer
+        outs:
+          type: integer
+          description: Defensive outs recorded so far in this inning (0-3)
+        completed:
+          type: boolean
+          description: True once outs reach 3
+        totalAtBats:
+          type: integer
+        goodCount:
+          type: integer
+        badCount:
+          type: integer
+        inningDelta:
+          type: integer
+        runsScored:
+          type: integer
+          description: Count of at-bats in this inning with outcomeType run_scored
+        playersLeftOnBase:
+          type: integer
+          description: Sum of playersLeftOnBase captured across this inning's at-bats
+        atBats:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+      required:
+        - inningNumber
+        - outs
+        - completed
+        - totalAtBats
+        - goodCount
+        - badCount
+        - inningDelta
+        - runsScored
+        - playersLeftOnBase
+        - atBats
     DashboardSummary:
       type: object
       properties:

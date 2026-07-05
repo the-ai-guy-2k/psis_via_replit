@@ -1,2 +1,3 @@
 - [Non-standard stack requests](non-standard-stack-requests.md) — when a user specs a stack the workspace can't run (e.g. Flask/Python), substitute the closest supported artifact combo and explain the swap, don't ask first.
 - [Artifact workflow naming](artifact-workflow-naming.md) — restart_workflow needs the exact name from listWorkflows(), not the artifact title or slug guess.
+- [Derived-state display vs mutation split](derived-state-display-vs-mutation.md) — a read-only "current state" endpoint must never auto-advance state as a side effect of being read; keep display and advance-on-write logic in separate functions.

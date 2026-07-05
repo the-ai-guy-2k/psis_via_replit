@@ -36,6 +36,8 @@ export const ListEntriesResponseItem = zod.object({
   "badCount": zod.number(),
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })
 export const ListEntriesResponse = zod.array(ListEntriesResponseItem)
@@ -76,6 +78,8 @@ export const CreateEntryResponse = zod.object({
   "badCount": zod.number(),
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })
 
@@ -100,6 +104,8 @@ export const GetDashboardResponse = zod.object({
   "badCount": zod.number(),
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })),
   "bestSequences": zod.array(zod.object({
@@ -119,6 +125,42 @@ export const GetDashboardResponse = zod.object({
   "totalStrikeouts": zod.number(),
   "averageDelta": zod.number(),
   "entryCount": zod.number()
+})
+
+
+/**
+ * @summary Get the active (or most recently completed) inning's state
+ */
+export const GetCurrentInningResponse = zod.object({
+  "inningNumber": zod.number(),
+  "outs": zod.number().describe('Defensive outs recorded so far in this inning (0-3)'),
+  "completed": zod.boolean().describe('True once outs reach 3'),
+  "totalAtBats": zod.number(),
+  "goodCount": zod.number(),
+  "badCount": zod.number(),
+  "inningDelta": zod.number(),
+  "runsScored": zod.number().describe('Count of at-bats in this inning with outcomeType run_scored'),
+  "playersLeftOnBase": zod.number().describe('Sum of playersLeftOnBase captured across this inning\'s at-bats'),
+  "atBats": zod.array(zod.object({
+  "id": zod.string(),
+  "createdAt": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
+  "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
+  "playersLeftOnBase": zod.number().optional(),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number(),
+  "badCount": zod.number(),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number(),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
+  "notes": zod.string().optional()
+}))
 })
 
 

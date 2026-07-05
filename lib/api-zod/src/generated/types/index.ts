@@ -12,6 +12,7 @@ export * from './entry';
 export * from './errorResponse';
 export * from './handedness';
 export * from './healthStatus';
+export * from './inningState';
 export * from './outcomeCategory';
 export * from './outcomeDetail';
 export * from './outcomeType';

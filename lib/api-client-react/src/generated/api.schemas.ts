@@ -128,6 +128,10 @@ export interface Entry {
   badCount: number;
   strikeoutCount: number;
   delta: number;
+  /** Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed. */
+  inningNumber?: number;
+  /** Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs. */
+  outsAdded?: number;
   notes?: string;
 }
 
@@ -136,6 +140,23 @@ export interface SequenceStat {
   totalDelta: number;
   averageDelta: number;
   occurrences: number;
+}
+
+export interface InningState {
+  inningNumber: number;
+  /** Defensive outs recorded so far in this inning (0-3) */
+  outs: number;
+  /** True once outs reach 3 */
+  completed: boolean;
+  totalAtBats: number;
+  goodCount: number;
+  badCount: number;
+  inningDelta: number;
+  /** Count of at-bats in this inning with outcomeType run_scored */
+  runsScored: number;
+  /** Sum of playersLeftOnBase captured across this inning's at-bats */
+  playersLeftOnBase: number;
+  atBats: Entry[];
 }
 
 export interface DashboardSummary {

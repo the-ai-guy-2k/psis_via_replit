@@ -1,0 +1,212 @@
+PSIS TRACKER INNING LOGIC UPDATE
+
+MISSION ADDITION
+
+Update the Tracker so the user can keep entering at-bat outcomes for the current inning until 3 defensive outs are recorded.
+
+Once the inning reaches 3 outs, the app must stop/complete the inning and calculate the inning delta.
+
+==================================================
+NEW TRACKER LOGIC
+==================================================
+
+The Tracker should operate by inning.
+
+User enters one at-bat outcome at a time.
+
+Each saved at-bat updates:
+
+- current inning outs
+- current inning good count
+- current inning bad count
+- current inning delta
+
+The inning remains active until outs = 3.
+
+When outs reach 3:
+
+- Lock or complete the inning
+- Calculate final inning delta
+- Display inning summary
+- Allow user to start next inning
+
+==================================================
+OUT COUNT LOGIC
+==================================================
+
+Defensive outcomes should add outs:
+
+Strikeout = +1 out
+Fly Out = +1 out
+Ground Out = +1 out
+Infield Catch = +1 out
+Double Play = +2 outs
+Triple Play = +3 outs
+
+Offensive outcomes should add 0 outs:
+
+Run Scored = 0 outs
+Hit = 0 outs
+Walk = 0 outs
+Home Run = 0 outs
+Extra Base Hit = 0 outs
+
+Do not allow outs to exceed 3.
+
+If a Double Play or Triple Play would push outs beyond 3, cap the inning outs at 3.
+
+==================================================
+DELTA LOGIC
+==================================================
+
+For each at-bat, classify the outcome as Good or Bad.
+
+Suggested MVP scoring:
+
+GOOD OUTCOMES:
+
+- Strikeout
+- Fly Out
+- Ground Out
+- Infield Catch
+- Double Play
+- Triple Play
+
+BAD OUTCOMES:
+
+- Run Scored
+- Hit
+- Walk
+- Home Run
+- Extra Base Hit
+
+Then calculate:
+
+goodCount - badCount = inningDelta
+
+==================================================
+INNING SUMMARY
+==================================================
+
+When outs = 3, display:
+
+- Inning number
+- Total at-bats recorded
+- Good outcomes
+- Bad outcomes
+- Final inning delta
+- Defensive outs recorded
+- Runs scored if captured
+- Players left on base if captured
+
+==================================================
+UI REQUIREMENTS
+==================================================
+
+Tracker should show:
+
+- Current inning number
+- Current outs: 0 / 3, 1 / 3, 2 / 3, 3 / 3
+- Current inning delta
+- At-bat outcome wizard
+- Recent at-bats for current inning
+- Completed inning summary when inning ends
+- Start Next Inning button after inning completion
+
+==================================================
+DATA REQUIREMENTS
+==================================================
+
+Each at-bat should include:
+
+- inningNumber
+- outcomeCategory
+- outcomeType
+- outcomeDetail if applicable
+- outsAdded
+- goodBadClassification
+- deltaImpact
+- playersLeftOnBase if applicable
+- timestamp or entry order
+
+Each inning summary should include:
+
+- inningNumber
+- totalAtBats
+- outs
+- goodCount
+- badCount
+- inningDelta
+- completed: true / false
+
+==================================================
+ACCEPTANCE CRITERIA ADDITIONS
+==================================================
+
+PASS requires:
+
+1. User can enter multiple at-bats in one inning.
+
+2. Inning remains open until 3 outs are reached.
+
+3. Defensive outcomes correctly increase out count.
+
+4. Offensive outcomes do not increase out count.
+
+5. Outs never exceed 3.
+
+6. Inning delta updates after each at-bat.
+
+7. Final inning delta is calculated when 3 outs are reached.
+
+8. Completed inning summary is displayed.
+
+9. User can start the next inning.
+
+10. Existing dashboard/stat logic does not crash.
+
+==================================================
+VALIDATION TESTS
+==================================================
+
+Test 1:
+
+Defense → Strikeout
+Expected outs: 1
+Expected good count: 1
+Expected delta: +1
+
+Test 2:
+
+Offense → Walk
+Expected outs: 1
+Expected bad count: 1
+Expected delta: 0
+
+Test 3:
+
+Defense → Double Play
+Expected outs: 3
+Expected inning complete
+Expected final delta calculated
+
+Test 4:
+
+New inning starts after clicking Start Next Inning.
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Full game scoring
+- Base runner simulation
+- Pitch count logic
+- Player database
+- Team management
+- AI recommendations
+- Cloud database
+- Authentication
+
+This update is only for inning-based outcome tracking and inning delta calculation.
