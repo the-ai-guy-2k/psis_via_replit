@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Entry, ResultOutcome, OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-zod";
+import type { Entry, ResultOutcome, OutcomeCategory, OutcomeType, OutcomeDetail, BaseState } from "@workspace/api-zod";
 import { logger } from "./logger";
 
 const GOOD_RESULTS: ResultOutcome[] = [
@@ -68,7 +68,12 @@ export interface InningState {
   inningDelta: number;
   runsScored: number;
   playersLeftOnBase: number;
+  baseState: BaseState;
   atBats: Entry[];
+}
+
+export function emptyBaseState(): BaseState {
+  return { firstBase: false, secondBase: false, thirdBase: false };
 }
 
 function emptyInningState(inningNumber: number): InningState {
@@ -82,8 +87,89 @@ function emptyInningState(inningNumber: number): InningState {
     inningDelta: 0,
     runsScored: 0,
     playersLeftOnBase: 0,
+    baseState: emptyBaseState(),
     atBats: [],
   };
+}
+
+/**
+ * Forced-advancement walk logic (MVP): the batter always takes first. A
+ * runner is only pushed to the next base if the base behind them is
+ * occupied, exactly mirroring real force-play rules without any
+ * steal/tag-up logic. A run is forced home only when the bases were loaded.
+ */
+function applyWalk(bases: BaseState): { baseState: BaseState; runsScored: number } {
+  const { firstBase, secondBase, thirdBase } = bases;
+  let runsScored = 0;
+  let newSecond = secondBase;
+  let newThird = thirdBase;
+
+  if (firstBase) {
+    if (secondBase) {
+      if (thirdBase) runsScored += 1;
+      newThird = true;
+    }
+    newSecond = true;
+  }
+
+  return { baseState: { firstBase: true, secondBase: newSecond, thirdBase: newThird }, runsScored };
+}
+
+// How many bases the batter (and every existing runner) advances for each
+// hit type. home_run is included here since a 4-base advance naturally
+// clears the bases and scores every runner plus the batter.
+const HIT_ADVANCE_BASES: Partial<Record<OutcomeDetail, number>> = {
+  single: 1,
+  double: 2,
+  triple: 3,
+  home_run: 4,
+};
+
+/**
+ * Advances every existing runner (and the batter, starting at "base 0")
+ * by `advance` bases. Anyone pushed to base 4+ has scored. This is the MVP
+ * simplification used for all hit types — no fielder's choice, no
+ * situational holding a runner at a base.
+ */
+function advanceRunners(bases: BaseState, advance: number): { baseState: BaseState; runsScored: number } {
+  const occupiedBases = [0, ...(bases.firstBase ? [1] : []), ...(bases.secondBase ? [2] : []), ...(bases.thirdBase ? [3] : [])];
+
+  let runsScored = 0;
+  const newBaseState = emptyBaseState();
+  for (const base of occupiedBases) {
+    const newPosition = base + advance;
+    if (newPosition >= 4) runsScored += 1;
+    else if (newPosition === 1) newBaseState.firstBase = true;
+    else if (newPosition === 2) newBaseState.secondBase = true;
+    else if (newPosition === 3) newBaseState.thirdBase = true;
+  }
+
+  return { baseState: newBaseState, runsScored };
+}
+
+/**
+ * Applies an at-bat's outcome to the current base state, returning the
+ * resulting occupancy and runs scored on this at-bat. Defensive outcomes
+ * (outs) never move runners in this MVP model (no fielder's choice, no
+ * tag-up/sac logic). The legacy `run_scored` outcomeType predates
+ * base-state tracking and is left untouched here — its runsScored is
+ * supplied manually by the caller instead.
+ */
+export function applyOutcomeToBaseState(
+  outcomeCategory: OutcomeCategory,
+  outcomeType: OutcomeType,
+  outcomeDetail: OutcomeDetail | undefined,
+  baseState: BaseState,
+): { baseState: BaseState; runsScored: number } {
+  if (outcomeCategory !== "offense") return { baseState, runsScored: 0 };
+  if (outcomeType === "walk") return applyWalk(baseState);
+  if (outcomeType === "hit") {
+    const advance = (outcomeDetail && HIT_ADVANCE_BASES[outcomeDetail]) ?? 1;
+    return advanceRunners(baseState, advance);
+  }
+  // Legacy offense outcomes (run_scored, extra_base_hit, home_run as a
+  // top-level value) predate base-state tracking — leave bases untouched.
+  return { baseState, runsScored: 0 };
 }
 
 /**
@@ -107,8 +193,9 @@ export function computeInningState(entries: Entry[], inningNumber: number): Inni
     goodCount: atBats.reduce((sum, e) => sum + e.goodCount, 0),
     badCount: atBats.reduce((sum, e) => sum + e.badCount, 0),
     inningDelta: atBats.reduce((sum, e) => sum + e.delta, 0),
-    runsScored: atBats.reduce((sum, e) => sum + (e.outcomeType === "run_scored" ? (e.runsScored ?? 1) : 0), 0),
+    runsScored: atBats.reduce((sum, e) => sum + (e.runsScored ?? 0), 0),
     playersLeftOnBase: atBats.reduce((sum, e) => sum + (e.playersLeftOnBase ?? 0), 0),
+    baseState: atBats[atBats.length - 1]?.baseState ?? emptyBaseState(),
     atBats,
   };
 }
@@ -131,14 +218,17 @@ export function computeLatestInningState(entries: Entry[]): InningState {
 }
 
 /**
- * Resolves which inning (and current out count) a new at-bat should be
- * recorded against, auto-advancing past a just-completed inning.
+ * Resolves which inning (and current out count / base state) a new at-bat
+ * should be recorded against, auto-advancing past a just-completed inning.
+ * Base state resets to empty at the start of a new inning.
  */
-export function resolveInningForNewAtBat(entries: Entry[]): { inningNumber: number; currentOuts: number } {
+export function resolveInningForNewAtBat(
+  entries: Entry[],
+): { inningNumber: number; currentOuts: number; baseState: BaseState } {
   const latest = computeLatestInningState(entries);
   return latest.completed
-    ? { inningNumber: latest.inningNumber + 1, currentOuts: 0 }
-    : { inningNumber: latest.inningNumber, currentOuts: latest.outs };
+    ? { inningNumber: latest.inningNumber + 1, currentOuts: 0, baseState: emptyBaseState() }
+    : { inningNumber: latest.inningNumber, currentOuts: latest.outs, baseState: latest.baseState };
 }
 
 async function ensureDataFile(): Promise<void> {
@@ -179,15 +269,4 @@ export async function appendEntry(entry: Entry): Promise<Entry> {
   entries.push(entry);
   await writeEntries(entries);
   return entry;
-}
-
-export async function updateEntry(id: string, patch: Partial<Pick<Entry, "playersLeftOnBase">>): Promise<Entry | undefined> {
-  const entries = await readEntries();
-  const index = entries.findIndex(e => e.id === id);
-  if (index === -1) return undefined;
-
-  const updated = { ...entries[index], ...patch };
-  entries[index] = updated;
-  await writeEntries(entries);
-  return updated;
 }

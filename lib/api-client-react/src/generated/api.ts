@@ -25,8 +25,7 @@ import type {
   Entry,
   ErrorResponse,
   HealthStatus,
-  InningState,
-  UpdateEntryInput
+  InningState
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -279,77 +278,6 @@ export const useCreateEntry = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateEntryMutationOptions(options));
-    }
-
-export const getUpdateEntryUrl = (id: string,) => {
-
-
-
-
-  return `/api/entries/${id}`
-}
-
-/**
- * @summary Update an existing entry, currently used only to record runners left on base once an inning completes
- */
-export const updateEntry = async (id: string,
-    updateEntryInput: UpdateEntryInput, options?: RequestInit): Promise<Entry> => {
-
-  return customFetch<Entry>(getUpdateEntryUrl(id),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateEntryInput)
-  }
-);}
-
-
-
-
-export const getUpdateEntryMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntry>>, TError,{id: string;data: BodyType<UpdateEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateEntry>>, TError,{id: string;data: BodyType<UpdateEntryInput>}, TContext> => {
-
-const mutationKey = ['updateEntry'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntry>>, {id: string;data: BodyType<UpdateEntryInput>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  updateEntry(id,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateEntryMutationResult = NonNullable<Awaited<ReturnType<typeof updateEntry>>>
-    export type UpdateEntryMutationBody = BodyType<UpdateEntryInput>
-    export type UpdateEntryMutationError = ErrorType<ErrorResponse>
-
-    /**
- * @summary Update an existing entry, currently used only to record runners left on base once an inning completes
- */
-export const useUpdateEntry = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntry>>, TError,{id: string;data: BodyType<UpdateEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof updateEntry>>,
-        TError,
-        {id: string;data: BodyType<UpdateEntryInput>},
-        TContext
-      > => {
-      return useMutation(getUpdateEntryMutationOptions(options));
     }
 
 export const getGetDashboardUrl = () => {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './baseState';
 export * from './createEntryInput';
 export * from './dashboardSummary';
 export * from './entry';
@@ -19,4 +20,3 @@ export * from './outcomeType';
 export * from './resultCategory';
 export * from './resultOutcome';
 export * from './sequenceStat';
-export * from './updateEntryInput';

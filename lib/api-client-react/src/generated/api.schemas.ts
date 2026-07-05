@@ -112,7 +112,7 @@ export interface CreateEntryInput {
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;
   /**
-     * Number of runs scored on this at-bat, required when outcomeType is run_scored
+     * Legacy manual override, only accepted (and required) when outcomeType is the legacy run_scored value. For hit/walk/home_run outcomes, runsScored is always computed server-side from base-state advancement and must not be supplied by the client.
      * @minimum 1
      * @maximum 4
      */
@@ -120,13 +120,13 @@ export interface CreateEntryInput {
   notes?: string;
 }
 
-export interface UpdateEntryInput {
-  /**
-     * Runners left on base for the inning this entry completed
-     * @minimum 0
-     * @maximum 3
-     */
-  playersLeftOnBase: number;
+/**
+ * Runner occupancy on each base, tracked per-inning for the MVP base-state simulation (no steals/errors/tag-ups).
+ */
+export interface BaseState {
+  firstBase: boolean;
+  secondBase: boolean;
+  thirdBase: boolean;
 }
 
 export interface Entry {
@@ -138,9 +138,11 @@ export interface Entry {
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
-  /** Number of runs scored on this at-bat, only present when outcomeType is run_scored */
+  /** Runs scored on this at-bat. Computed server-side from base-state advancement for hit/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed. */
   runsScored?: number;
-  /** Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field. */
+  /** Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed. */
+  baseState?: BaseState;
+  /** Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field. */
   playersLeftOnBase?: number;
   /** Legacy flat outcome value, only present on entries created before the outcome wizard */
   result?: ResultOutcome;
@@ -173,10 +175,12 @@ export interface InningState {
   goodCount: number;
   badCount: number;
   inningDelta: number;
-  /** Total runs scored across this inning's run_scored at-bats */
+  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored */
   runsScored: number;
-  /** Runners left on base, captured once when the inning completes */
+  /** Runners left on base, auto-calculated from base occupancy once the inning completes */
   playersLeftOnBase: number;
+  /** Current runner occupancy for this inning (as of the most recent at-bat) */
+  baseState: BaseState;
   atBats: Entry[];
 }
 

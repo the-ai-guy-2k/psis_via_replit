@@ -1,0 +1,302 @@
+PSIS ACI UPDATE — THREE PATCH FIXES
+
+MISSION
+
+Apply three Tracker patch fixes:
+
+1. Update inning delta scoreboard display format.
+2. Stop asking user to enter number of players left on base.
+3. Stop asking user to enter runs scored manually when runs can be calculated from tracked base/state logic.
+
+==================================================
+PATCH FIX 1 — INNING DELTA SCOREBOARD FORMAT
+==================================================
+
+Update completed inning delta display from inline text:
+
+1: +1 2: +2 3: +3
+
+to compact scoreboard-style tiles.
+
+Each completed inning tile must display:
+
+Top:
+- final inning delta
+
+Middle:
+- EABR fraction
+
+Bottom:
+- inning number
+
+Example:
+
+|  +1  |  +2  |  +3  |
+| 3/6  | 4/7  | 5/8  |
+|  1   |  2   |  3   |
+
+Field meaning:
+
+- Top = finalInningDelta
+- Middle = goodCount / totalAtBats
+- Bottom = inningNumber
+
+Requirements:
+
+- Use completed inning summary data.
+- Display tiles horizontally.
+- Center values.
+- Keep compact enough for the Tracker header Game Status area.
+
+==================================================
+PATCH FIX 2 — AUTO-CALCULATE PLAYERS LEFT ON BASE
+==================================================
+
+Remove the user prompt asking:
+
+"How many players were left on base?"
+
+The app should calculate players left on base from tracked inning/base state.
+
+At the end of the inning:
+
+- Still ask: "Are there players left on base?" only if needed OR remove the prompt entirely if base state is reliable.
+- Preferred behavior: do not ask the user.
+- Calculate LOB automatically from current base occupancy.
+
+Logic:
+
+playersLeftOnBase =
+number of occupied bases when inning ends
+
+Example:
+
+Runner on first only = 1 LOB
+Runners on first and second = 2 LOB
+Bases loaded = 3 LOB
+No runners = 0 LOB
+
+Store calculated value in the inning summary as:
+
+playersLeftOnBase
+
+Do not require manual entry.
+
+==================================================
+PATCH FIX 3 — AUTO-CALCULATE RUNS SCORED
+==================================================
+
+Remove manual runs scored entry when runs can be calculated from tracked offensive outcomes and base state.
+
+The app should calculate runsScored from base runner movement.
+
+Minimum MVP base-state logic:
+
+Track base occupancy:
+
+- firstBase
+- secondBase
+- thirdBase
+
+When offensive outcomes occur:
+
+Walk:
+- Move runners only when forced.
+- If bases loaded, one run scores.
+
+Single:
+- Batter reaches first.
+- Advance existing runners according to simple MVP logic.
+- Any runner advanced past home counts as a run.
+
+Double:
+- Batter reaches second.
+- Advance runners using simple MVP logic.
+- Any runner advanced past home counts as a run.
+
+Triple:
+- Batter reaches third.
+- Advance runners using simple MVP logic.
+- Any runner advanced past home counts as a run.
+
+Home Run:
+- Batter scores.
+- All runners currently on base score.
+- Clear bases.
+
+Run Scored:
+- If this outcome remains in the UI, treat it as optional/manual override only.
+- Preferred behavior: remove Run Scored as a primary offensive outcome if base-state logic can calculate runs from hits/walks/home runs.
+
+Store calculated value in the inning summary as:
+
+runsScored
+
+Delta must use calculated runsScored.
+
+Final inning delta:
+
+goodCount - badCount - runsScored = finalInningDelta
+
+==================================================
+BASE STATE DISPLAY REQUIREMENT
+==================================================
+
+Add or update a simple base-state display in the Tracker so the user can see:
+
+- Runner on 1st
+- Runner on 2nd
+- Runner on 3rd
+
+This can be visual or text-based.
+
+Example:
+
+Bases: 1B ● | 2B ○ | 3B ●
+
+The user should be able to understand why LOB and runs were calculated.
+
+==================================================
+IMPORTANT CONSTRAINT
+==================================================
+
+Keep this as MVP logic.
+
+Do not build full baseball simulation.
+
+Do not add:
+
+- Steals
+- Errors
+- Sacrifice logic
+- Fielder choice
+- Tag-up logic
+- Advanced runner advancement controls
+- Player database
+- Full scorebook
+
+This patch only needs enough base-state tracking to calculate:
+
+- runs scored
+- players left on base
+- inning delta
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Completed inning deltas display as stacked scoreboard tiles.
+
+2. Each tile shows:
+   - final delta
+   - EABR fraction
+   - inning number
+
+3. User is no longer required to manually enter number of players left on base.
+
+4. Players left on base is calculated from base occupancy at inning end.
+
+5. Runs scored is calculated from offensive outcomes and base state.
+
+6. Final inning delta uses calculated runs scored.
+
+7. Base state is visible to the user.
+
+8. Recent Log still resets only after final delta is calculated.
+
+9. Existing Tracker flow still works.
+
+10. Dashboard does not crash.
+
+==================================================
+VALIDATION TESTS
+==================================================
+
+Test 1 — Scoreboard Tile
+
+Complete an inning.
+
+Expected:
+
+Completed inning display shows:
+
+delta
+EABR fraction
+inning number
+
+in stacked tile format.
+
+--------------------------------------------------
+
+Test 2 — LOB Calculation
+
+Create inning ending with runner on first.
+
+Expected:
+
+playersLeftOnBase = 1
+
+No manual LOB number entry required.
+
+--------------------------------------------------
+
+Test 3 — Home Run Calculation
+
+Put two runners on base.
+
+Select Hit → Home Run.
+
+Expected:
+
+runsScored = 3
+
+Bases clear.
+
+--------------------------------------------------
+
+Test 4 — Walk With Bases Loaded
+
+Load bases.
+
+Select Walk.
+
+Expected:
+
+runsScored increases by 1.
+
+Bases remain loaded with forced runner movement.
+
+--------------------------------------------------
+
+Test 5 — Delta Calculation
+
+If:
+
+goodCount = 4
+badCount = 2
+runsScored = 1
+
+Expected:
+
+finalInningDelta = +1
+
+because:
+
+4 - 2 - 1 = 1
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- UI changes
+- Base-state logic added
+- Run calculation logic added
+- LOB calculation logic added
+- Delta display changes
+- Validation results
+- PASS / PARTIAL PASS / FAIL

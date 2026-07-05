@@ -29,8 +29,13 @@ export const ListEntriesResponseItem = zod.object({
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
   "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().optional().describe('Number of runs scored on this at-bat, only present when outcomeType is run_scored'),
-  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number(),
@@ -59,7 +64,7 @@ export const CreateEntryBody = zod.object({
   "outcomeCategory": zod.enum(['defense', 'offense']).describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
   "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().min(1).max(createEntryBodyRunsScoredMax).optional().describe('Number of runs scored on this at-bat, required when outcomeType is run_scored'),
+  "runsScored": zod.number().min(1).max(createEntryBodyRunsScoredMax).optional().describe('Legacy manual override, only accepted (and required) when outcomeType is the legacy run_scored value. For hit\/walk\/home_run outcomes, runsScored is always computed server-side from base-state advancement and must not be supplied by the client.'),
   "notes": zod.string().optional()
 })
 
@@ -72,47 +77,13 @@ export const CreateEntryResponse = zod.object({
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
   "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().optional().describe('Number of runs scored on this at-bat, only present when outcomeType is run_scored'),
-  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
-  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
-  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
-  "goodCount": zod.number(),
-  "badCount": zod.number(),
-  "strikeoutCount": zod.number(),
-  "delta": zod.number(),
-  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
-  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
-  "notes": zod.string().optional()
-})
-
-
-/**
- * @summary Update an existing entry, currently used only to record runners left on base once an inning completes
- */
-export const UpdateEntryParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const updateEntryBodyPlayersLeftOnBaseMin = 0;
-export const updateEntryBodyPlayersLeftOnBaseMax = 3;
-
-
-
-export const UpdateEntryBody = zod.object({
-  "playersLeftOnBase": zod.number().min(updateEntryBodyPlayersLeftOnBaseMin).max(updateEntryBodyPlayersLeftOnBaseMax).describe('Runners left on base for the inning this entry completed')
-})
-
-export const UpdateEntryResponse = zod.object({
-  "id": zod.string(),
-  "createdAt": zod.string(),
-  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
-  "batterHandedness": zod.enum(['L', 'R']).optional(),
-  "pitchSequence": zod.string().optional(),
-  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
-  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
-  "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().optional().describe('Number of runs scored on this at-bat, only present when outcomeType is run_scored'),
-  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number(),
@@ -138,8 +109,13 @@ export const GetDashboardResponse = zod.object({
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
   "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().optional().describe('Number of runs scored on this at-bat, only present when outcomeType is run_scored'),
-  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number(),
@@ -181,8 +157,13 @@ export const GetCurrentInningResponse = zod.object({
   "goodCount": zod.number(),
   "badCount": zod.number(),
   "inningDelta": zod.number(),
-  "runsScored": zod.number().describe('Total runs scored across this inning\'s run_scored at-bats'),
-  "playersLeftOnBase": zod.number().describe('Runners left on base, captured once when the inning completes'),
+  "runsScored": zod.number().describe('Total runs scored across this inning\'s at-bats, summed from each at-bat\'s computed runsScored'),
+  "playersLeftOnBase": zod.number().describe('Runners left on base, auto-calculated from base occupancy once the inning completes'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).describe('Current runner occupancy for this inning (as of the most recent at-bat)'),
   "atBats": zod.array(zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
@@ -192,8 +173,13 @@ export const GetCurrentInningResponse = zod.object({
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
   "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
-  "runsScored": zod.number().optional().describe('Number of runs scored on this at-bat, only present when outcomeType is run_scored'),
-  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number(),

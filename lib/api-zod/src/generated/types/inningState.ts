@@ -5,6 +5,7 @@
  * PSIS - Pitch Sequence Intelligence System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BaseState } from './baseState';
 import type { Entry } from './entry';
 
 export interface InningState {
@@ -17,9 +18,11 @@ export interface InningState {
   goodCount: number;
   badCount: number;
   inningDelta: number;
-  /** Total runs scored across this inning's run_scored at-bats */
+  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored */
   runsScored: number;
-  /** Runners left on base, captured once when the inning completes */
+  /** Runners left on base, auto-calculated from base occupancy once the inning completes */
   playersLeftOnBase: number;
+  /** Current runner occupancy for this inning (as of the most recent at-bat) */
+  baseState: BaseState;
   atBats: Entry[];
 }

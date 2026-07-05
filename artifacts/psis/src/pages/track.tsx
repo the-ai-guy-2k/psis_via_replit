@@ -2,14 +2,13 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateEntry,
-  useUpdateEntry,
   useListEntries,
   useGetCurrentInning,
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
   getGetCurrentInningQueryKey,
 } from "@workspace/api-client-react";
-import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-client-react";
+import type { OutcomeCategory, OutcomeType, OutcomeDetail, BaseState } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,36 +31,60 @@ type WizardState = {
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
-  runsScored?: number;
 };
 
 const emptyWizard: WizardState = { started: false };
 
-type CompletedInningDelta = { inningNumber: number; delta: number };
+type CompletedInningTile = { inningNumber: number; delta: number; goodCount: number; totalAtBats: number };
 
 /**
- * Completed-inning delta history for the Game Status Panel, derived purely
- * client-side from the full entries list — an inning counts as "completed"
- * once its at-bats' outsAdded sum to 3, mirroring the server's own
- * completion rule (see computeInningState in psisStore.ts) without adding a
- * new API endpoint.
+ * Completed-inning scoreboard tiles for the Game Status Panel, derived
+ * purely client-side from the full entries list — an inning counts as
+ * "completed" once its at-bats' outsAdded sum to 3, mirroring the server's
+ * own completion rule (see computeInningState in psisStore.ts) without
+ * adding a new API endpoint.
  */
-function computeCompletedInningDeltas(
-  entries: { inningNumber?: number; delta: number; outsAdded?: number }[] | undefined,
-): CompletedInningDelta[] {
+function computeCompletedInningTiles(
+  entries: { inningNumber?: number; delta: number; outsAdded?: number; goodCount: number }[] | undefined,
+): CompletedInningTile[] {
   if (!entries) return [];
-  const byInning = new Map<number, { delta: number; outs: number }>();
+  const byInning = new Map<number, { delta: number; outs: number; goodCount: number; totalAtBats: number }>();
   for (const entry of entries) {
     if (entry.inningNumber === undefined) continue;
-    const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0 };
+    const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0, goodCount: 0, totalAtBats: 0 };
     current.delta += entry.delta;
     current.outs += entry.outsAdded ?? 0;
+    current.goodCount += entry.goodCount;
+    current.totalAtBats += 1;
     byInning.set(entry.inningNumber, current);
   }
   return Array.from(byInning.entries())
     .filter(([, v]) => v.outs >= 3)
-    .map(([inningNumber, v]) => ({ inningNumber, delta: v.delta }))
+    .map(([inningNumber, v]) => ({ inningNumber, delta: v.delta, goodCount: v.goodCount, totalAtBats: v.totalAtBats }))
     .sort((a, b) => a.inningNumber - b.inningNumber);
+}
+
+/** Compact "Bases: 1B ● | 2B ○ | 3B ●" visual so the user can see why LOB/runs were calculated. */
+function BaseStateDisplay({ baseState }: { baseState: BaseState | undefined }) {
+  const bases: { label: string; occupied: boolean; testId: string }[] = [
+    { label: "1B", occupied: !!baseState?.firstBase, testId: "base-first" },
+    { label: "2B", occupied: !!baseState?.secondBase, testId: "base-second" },
+    { label: "3B", occupied: !!baseState?.thirdBase, testId: "base-third" },
+  ];
+  return (
+    <div className="flex items-center gap-2 font-mono text-sm" data-testid="base-state-display">
+      {bases.map((base, i) => (
+        <span key={base.label} className="flex items-center gap-1">
+          {i > 0 && <span className="text-muted-foreground">|</span>}
+          {base.label}
+          <Circle
+            data-testid={base.testId}
+            className={`w-2.5 h-2.5 ${base.occupied ? "fill-primary text-primary" : "text-muted-foreground/30"}`}
+          />
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default function Track() {
@@ -71,20 +94,16 @@ export default function Track() {
   const { data: entries, isLoading: entriesLoading } = useListEntries();
   const { data: inning, isLoading: inningLoading } = useGetCurrentInning();
   const createEntry = useCreateEntry();
-  const updateEntry = useUpdateEntry();
 
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
   const [acknowledgedInning, setAcknowledgedInning] = useState<number | undefined>(undefined);
-  const [lobHasPlayers, setLobHasPlayers] = useState<boolean | undefined>(undefined);
-  const [lobCount, setLobCount] = useState<number | undefined>(undefined);
 
   // Outcome types that need a follow-up click before an EABR (End of At-Bat
   // Result) is reached. Everything else (strikeout, walk) is itself the
   // EABR the instant it's clicked.
   const detailOptions = wizard.outcomeType ? detailOptionsForOutcomeType(wizard.outcomeType) : undefined;
   const needsDetail = !!detailOptions;
-  const needsRunsScored = wizard.outcomeType === "run_scored";
 
   const startOutcome = () => {
     setWizard({ started: true });
@@ -106,17 +125,10 @@ export default function Track() {
     setWizard(prev => ({ ...prev, outcomeDetail: detail }));
   };
 
-  const selectRunsScored = (runs: number) => {
-    setWizard(prev => ({ ...prev, runsScored: runs }));
-  };
-
   // Reached only once every required click in the path has been made — the
   // "EABR" (End of At-Bat Result). Nothing is ever saved before this.
   const isEabrReached =
-    !!wizard.outcomeCategory &&
-    !!wizard.outcomeType &&
-    (!needsDetail || !!wizard.outcomeDetail) &&
-    (!needsRunsScored || wizard.runsScored !== undefined);
+    !!wizard.outcomeCategory && !!wizard.outcomeType && (!needsDetail || !!wizard.outcomeDetail);
 
   const isFormComplete = isEabrReached;
 
@@ -127,7 +139,7 @@ export default function Track() {
 
   const goBack = () => {
     setWizard(prev => {
-      if (prev.outcomeDetail !== undefined || prev.runsScored !== undefined) {
+      if (prev.outcomeDetail !== undefined) {
         return { started: true, outcomeCategory: prev.outcomeCategory, outcomeType: prev.outcomeType };
       }
       if (prev.outcomeType !== undefined) {
@@ -144,7 +156,6 @@ export default function Track() {
   if (wizard.outcomeCategory) breadcrumb.push(wizard.outcomeCategory === "defense" ? "Defense" : "Offense");
   if (wizard.outcomeType) breadcrumb.push(labelForOutcomeValue(wizard.outcomeType));
   if (wizard.outcomeDetail) breadcrumb.push(labelForOutcomeValue(wizard.outcomeDetail));
-  if (wizard.runsScored !== undefined) breadcrumb.push(`${wizard.runsScored} Run${wizard.runsScored === 1 ? "" : "s"}`);
 
   const onSubmit = () => {
     if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType) {
@@ -157,7 +168,6 @@ export default function Track() {
           outcomeCategory: wizard.outcomeCategory,
           outcomeType: wizard.outcomeType,
           outcomeDetail: wizard.outcomeDetail,
-          runsScored: wizard.runsScored,
           notes: notes || undefined,
         },
       },
@@ -169,8 +179,6 @@ export default function Track() {
           });
           resetForm();
           setAcknowledgedInning(undefined);
-          setLobHasPlayers(undefined);
-          setLobCount(undefined);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
@@ -187,64 +195,25 @@ export default function Track() {
   };
 
   const recentEntry = entries?.[0];
-  const completedInningDeltas = computeCompletedInningDeltas(entries);
+  const completedInningTiles = computeCompletedInningTiles(entries);
 
   const waitingForNextInning = !!inning?.completed && acknowledgedInning === inning.inningNumber;
+  // Players left on base and the final delta are both computed server-side
+  // the instant the 3rd out is recorded, so the completed summary (incl.
+  // base-state-derived LOB) can be shown immediately — no separate
+  // confirmation step or manual question is needed.
   const showCompletedSummary = !!inning?.completed && !waitingForNextInning;
   const displayInningNumber = waitingForNextInning ? (inning?.inningNumber ?? 1) + 1 : inning?.inningNumber ?? 1;
   const displayOuts = waitingForNextInning ? 0 : inning?.outs ?? 0;
   const displayDelta = waitingForNextInning ? 0 : inning?.inningDelta ?? 0;
-
-  const lastAtBat = inning?.atBats[inning.atBats.length - 1];
-  const pendingEndInning = showCompletedSummary && !!lastAtBat && lastAtBat.playersLeftOnBase === undefined;
-
-  const isLobAnswerComplete = lobHasPlayers === false || (lobHasPlayers === true && lobCount !== undefined);
-
-  const selectLobNo = () => {
-    setLobHasPlayers(false);
-    setLobCount(undefined);
-  };
-
-  const selectLobYes = () => {
-    setLobHasPlayers(true);
-    setLobCount(undefined);
-  };
-
-  const selectLobCount = (count: number) => {
-    setLobCount(count);
-  };
-
-  const endInning = () => {
-    if (!lastAtBat || !isLobAnswerComplete) return;
-    const count = lobHasPlayers ? (lobCount ?? 0) : 0;
-    updateEntry.mutate(
-      { id: lastAtBat.id, data: { playersLeftOnBase: count } },
-      {
-        onSuccess: () => {
-          setLobHasPlayers(undefined);
-          setLobCount(undefined);
-          queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
-        },
-        onError: () => {
-          toast({
-            title: "Error",
-            description: "Failed to end the inning.",
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
+  const displayBaseState = waitingForNextInning ? undefined : inning?.baseState;
 
   const startNextInning = () => {
     if (inning) setAcknowledgedInning(inning.inningNumber);
   };
 
-  const inningEnded = showCompletedSummary && !pendingEndInning;
   const recentLogEntries =
-    !inning || inningEnded || waitingForNextInning
+    !inning || showCompletedSummary || waitingForNextInning
       ? []
       : (entries ?? []).filter(entry => entry.inningNumber === inning.inningNumber);
 
@@ -299,22 +268,38 @@ export default function Track() {
                         {displayDelta}
                       </div>
                     </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="text-center">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bases</div>
+                      <BaseStateDisplay baseState={displayBaseState} />
+                    </div>
                   </div>
-                  {completedInningDeltas.length > 0 && (
+                  {completedInningTiles.length > 0 && (
                     <>
                       <Separator orientation="vertical" className="h-10 hidden sm:block" />
                       <div className="text-center sm:text-left" data-testid="completed-inning-deltas">
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Completed</div>
-                        <div className="font-mono text-xs flex flex-wrap gap-x-2 gap-y-0.5 max-w-xs">
-                          {completedInningDeltas.map(({ inningNumber, delta }) => (
-                            <span
+                        <div className="flex flex-wrap gap-2 max-w-sm">
+                          {completedInningTiles.map(({ inningNumber, delta, goodCount, totalAtBats }) => (
+                            <div
                               key={inningNumber}
-                              className={delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : ""}
-                              data-testid={`completed-inning-delta-${inningNumber}`}
+                              className="flex flex-col items-center border rounded-sm px-2 py-1 bg-muted/30 leading-tight"
+                              data-testid={`completed-inning-tile-${inningNumber}`}
                             >
-                              {inningNumber}: {delta > 0 ? "+" : ""}
-                              {delta}
-                            </span>
+                              <span
+                                className={`font-mono font-bold text-sm ${delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : ""}`}
+                                data-testid={`completed-inning-delta-${inningNumber}`}
+                              >
+                                {delta > 0 ? "+" : ""}
+                                {delta}
+                              </span>
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                {goodCount}/{totalAtBats}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                Inn {inningNumber}
+                              </span>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -326,159 +311,63 @@ export default function Track() {
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             {showCompletedSummary && inning ? (
-              pendingEndInning ? (
-                <div className="space-y-4" data-testid="inning-summary">
-                  <div className="flex items-center gap-2 text-primary">
-                    <AlertCircle className="w-5 h-5" />
-                    <span className="font-bold uppercase tracking-wider">
-                      Inning {inning.inningNumber} — 3 Outs. Confirm To End.
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
-                      <div className="font-mono font-bold text-xl">{inning.inningNumber}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
-                      <div className="font-mono font-bold text-xl">{inning.outs} / 3</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good Outcomes</div>
-                      <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad Outcomes</div>
-                      <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
-                      <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
-                        {inning.runsScored}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-2 border-primary/30 rounded-sm p-4 space-y-3" data-testid="lob-question">
-                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">
-                      Are there players left on base?
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={selectLobNo}
-                        disabled={updateEntry.isPending}
-                        data-testid="btn-lob-inning-no"
-                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                          lobHasPlayers === false ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        No
-                      </button>
-                      <button
-                        type="button"
-                        onClick={selectLobYes}
-                        disabled={updateEntry.isPending}
-                        data-testid="btn-lob-inning-yes"
-                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                          lobHasPlayers === true ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        Yes
-                      </button>
-                    </div>
-                    {lobHasPlayers === true && (
-                      <div className="space-y-2 pt-1">
-                        <Label className="text-xs text-muted-foreground">How many players were left on base?</Label>
-                        <div className="grid grid-cols-3 gap-4">
-                          {[1, 2, 3].map(n => (
-                            <button
-                              key={n}
-                              type="button"
-                              onClick={() => selectLobCount(n)}
-                              disabled={updateEntry.isPending}
-                              data-testid={`btn-lob-count-${n}`}
-                              className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-                                lobCount === n ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
-                              }`}
-                            >
-                              {n}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <Button
-                    type="button"
-                    onClick={endInning}
-                    className="w-full rounded-none font-bold uppercase tracking-wider"
-                    disabled={!isLobAnswerComplete || updateEntry.isPending}
-                    data-testid="btn-end-inning"
-                  >
-                    {updateEntry.isPending ? "Ending Inning..." : "End Inning"}
-                  </Button>
+              <div className="space-y-4" data-testid="inning-summary">
+                <div className="flex items-center gap-2 text-success">
+                  <PartyPopper className="w-5 h-5" />
+                  <span className="font-bold uppercase tracking-wider">Inning {inning.inningNumber} Complete</span>
                 </div>
-              ) : (
-                <div className="space-y-4" data-testid="inning-summary">
-                  <div className="flex items-center gap-2 text-success">
-                    <PartyPopper className="w-5 h-5" />
-                    <span className="font-bold uppercase tracking-wider">Inning {inning.inningNumber} Complete</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">At-Bats</div>
-                      <div className="font-mono font-bold text-xl" data-testid="summary-total-at-bats">
-                        {inning.totalAtBats}
-                      </div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Defensive Outs</div>
-                      <div className="font-mono font-bold text-xl">{inning.outs}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good</div>
-                      <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad</div>
-                      <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
-                      <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
-                        {inning.runsScored}
-                      </div>
-                    </div>
-                    <div className="bg-muted/50 rounded-sm p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runners Left On Base</div>
-                      <div className="font-mono font-bold text-xl" data-testid="summary-players-left-on-base">
-                        {inning.playersLeftOnBase}
-                      </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">At-Bats</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-total-at-bats">
+                      {inning.totalAtBats}
                     </div>
                   </div>
-                  <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
-                    <span className="uppercase tracking-wider text-xs text-muted-foreground font-semibold">Final Inning Delta</span>
-                    <span
-                      className={`font-mono font-bold text-2xl ${inning.inningDelta > 0 ? "text-success" : inning.inningDelta < 0 ? "text-destructive" : ""}`}
-                      data-testid="summary-inning-delta"
-                    >
-                      {inning.inningDelta > 0 ? "+" : ""}
-                      {inning.inningDelta}
-                    </span>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Defensive Outs</div>
+                    <div className="font-mono font-bold text-xl">{inning.outs}</div>
                   </div>
-
-                  <Button
-                    type="button"
-                    onClick={startNextInning}
-                    className="w-full rounded-none font-bold uppercase tracking-wider"
-                    data-testid="btn-start-next-inning"
-                  >
-                    Start Next Inning
-                  </Button>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good</div>
+                    <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad</div>
+                    <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
+                      {inning.runsScored}
+                    </div>
+                  </div>
+                  <div className="bg-muted/50 rounded-sm p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runners Left On Base</div>
+                    <div className="font-mono font-bold text-xl" data-testid="summary-players-left-on-base">
+                      {inning.playersLeftOnBase}
+                    </div>
+                  </div>
                 </div>
-              )
+                <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
+                  <span className="uppercase tracking-wider text-xs text-muted-foreground font-semibold">Final Inning Delta</span>
+                  <span
+                    className={`font-mono font-bold text-2xl ${inning.inningDelta > 0 ? "text-success" : inning.inningDelta < 0 ? "text-destructive" : ""}`}
+                    data-testid="summary-inning-delta"
+                  >
+                    {inning.inningDelta > 0 ? "+" : ""}
+                    {inning.inningDelta}
+                  </span>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={startNextInning}
+                  className="w-full rounded-none font-bold uppercase tracking-wider"
+                  data-testid="btn-start-next-inning"
+                >
+                  Start Next Inning
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -606,25 +495,6 @@ export default function Track() {
                           className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
                         >
                           {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {needsRunsScored && wizard.runsScored === undefined && (
-                  <div className="space-y-2">
-                    <Label className="uppercase tracking-wider text-xs text-muted-foreground">How Many Runs Scored?</Label>
-                    <div className="grid grid-cols-4 gap-4">
-                      {[1, 2, 3, 4].map(n => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => selectRunsScored(n)}
-                          data-testid={`btn-runs-scored-${n}`}
-                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 hover:bg-primary/5"
-                        >
-                          {n}
                         </button>
                       ))}
                     </div>

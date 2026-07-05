@@ -5,6 +5,7 @@
  * PSIS - Pitch Sequence Intelligence System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BaseState } from './baseState';
 import type { Handedness } from './handedness';
 import type { OutcomeCategory } from './outcomeCategory';
 import type { OutcomeDetail } from './outcomeDetail';
@@ -21,9 +22,11 @@ export interface Entry {
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;
-  /** Number of runs scored on this at-bat, only present when outcomeType is run_scored */
+  /** Runs scored on this at-bat. Computed server-side from base-state advancement for hit/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed. */
   runsScored?: number;
-  /** Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field. */
+  /** Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed. */
+  baseState?: BaseState;
+  /** Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field. */
   playersLeftOnBase?: number;
   /** Legacy flat outcome value, only present on entries created before the outcome wizard */
   result?: ResultOutcome;

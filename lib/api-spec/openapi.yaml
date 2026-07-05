@@ -67,42 +67,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /entries/{id}:
-    patch:
-      operationId: updateEntry
-      tags: [entries]
-      summary: Update an existing entry, currently used only to record runners left on base once an inning completes
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateEntryInput"
-      responses:
-        "200":
-          description: Updated entry
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Entry"
-        "400":
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Entry not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   /dashboard:
     get:
       operationId: getDashboard
@@ -228,22 +192,30 @@ components:
           type: integer
           minimum: 1
           maximum: 4
-          description: Number of runs scored on this at-bat, required when outcomeType is run_scored
+          description: >-
+            Legacy manual override, only accepted (and required) when
+            outcomeType is the legacy run_scored value. For hit/walk/home_run
+            outcomes, runsScored is always computed server-side from
+            base-state advancement and must not be supplied by the client.
         notes:
           type: string
       required:
         - outcomeCategory
         - outcomeType
-    UpdateEntryInput:
+    BaseState:
       type: object
+      description: Runner occupancy on each base, tracked per-inning for the MVP base-state simulation (no steals/errors/tag-ups).
       properties:
-        playersLeftOnBase:
-          type: integer
-          minimum: 0
-          maximum: 3
-          description: Runners left on base for the inning this entry completed
+        firstBase:
+          type: boolean
+        secondBase:
+          type: boolean
+        thirdBase:
+          type: boolean
       required:
-        - playersLeftOnBase
+        - firstBase
+        - secondBase
+        - thirdBase
     Entry:
       type: object
       properties:
@@ -265,10 +237,17 @@ components:
           $ref: "#/components/schemas/OutcomeDetail"
         runsScored:
           type: integer
-          description: Number of runs scored on this at-bat, only present when outcomeType is run_scored
+          description: >-
+            Runs scored on this at-bat. Computed server-side from base-state
+            advancement for hit/walk outcomes (0 when no runner crosses
+            home), or supplied manually for the legacy run_scored outcome
+            type. Absent on entries created before this field existed.
+        baseState:
+          $ref: "#/components/schemas/BaseState"
+          description: Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.
         playersLeftOnBase:
           type: integer
-          description: Runners left on base for the inning this entry completed. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field.
+          description: Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning's 3rd out; other at-bats never carry this field.
         result:
           $ref: "#/components/schemas/ResultOutcome"
           description: Legacy flat outcome value, only present on entries created before the outcome wizard
@@ -335,10 +314,13 @@ components:
           type: integer
         runsScored:
           type: integer
-          description: Total runs scored across this inning's run_scored at-bats
+          description: Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored
         playersLeftOnBase:
           type: integer
-          description: Runners left on base, captured once when the inning completes
+          description: Runners left on base, auto-calculated from base occupancy once the inning completes
+        baseState:
+          $ref: "#/components/schemas/BaseState"
+          description: Current runner occupancy for this inning (as of the most recent at-bat)
         atBats:
           type: array
           items:
@@ -353,6 +335,7 @@ components:
         - inningDelta
         - runsScored
         - playersLeftOnBase
+        - baseState
         - atBats
     DashboardSummary:
       type: object

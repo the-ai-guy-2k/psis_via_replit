@@ -22,7 +22,7 @@ export interface CreateEntryInput {
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;
   /**
-     * Number of runs scored on this at-bat, required when outcomeType is run_scored
+     * Legacy manual override, only accepted (and required) when outcomeType is the legacy run_scored value. For hit/walk/home_run outcomes, runsScored is always computed server-side from base-state advancement and must not be supplied by the client.
      * @minimum 1
      * @maximum 4
      */

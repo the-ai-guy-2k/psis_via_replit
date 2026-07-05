@@ -23,11 +23,16 @@ export const DEFENSE_OUTCOMES: OutcomeOption[] = [
   { value: "ground_out", label: "Ground Out" },
 ];
 
-/** Top-level offense options shown after clicking "Offense" in the EABR click flow. */
+/**
+ * Top-level offense options shown after clicking "Offense" in the EABR click
+ * flow. "Run Scored" was removed per the base-state auto-calculation patch —
+ * runs are now derived automatically from Hit/Walk base advancement instead
+ * of being logged as their own manual outcome. It is kept in the
+ * OutcomeType schema enum purely so pre-existing entries keep validating.
+ */
 export const OFFENSE_OUTCOMES: OutcomeOption[] = [
   { value: "hit", label: "Hit" },
   { value: "walk", label: "Walk" },
-  { value: "run_scored", label: "Run Scored" },
 ];
 
 export function outcomesForCategory(category: OutcomeCategory): OutcomeOption[] {
