@@ -5,9 +5,16 @@ import {
   ListEntriesResponse,
   CreateEntryResponse,
 } from "@workspace/api-zod";
-import { appendEntry, listEntries, resultCategoryFor } from "../lib/psisStore";
+import { appendEntry, listEntries, resultCategoryForOutcomeCategory } from "../lib/psisStore";
 
 const router: IRouter = Router();
+
+const LEFT_ON_BASE_ELIGIBLE = new Set([
+  "ground_out",
+  "fly_out",
+  "double_play",
+  "triple_play",
+]);
 
 router.get("/entries", async (req, res): Promise<void> => {
   const entries = await listEntries();
@@ -24,12 +31,41 @@ router.post("/entries", async (req, res): Promise<void> => {
   }
 
   const input = parsed.data;
+
+  if (input.outcomeType === "extra_base_hit" && !input.outcomeDetail) {
+    res.status(400).json({ message: "outcomeDetail (double or triple) is required for extra_base_hit" });
+    return;
+  }
+
+  if (input.outcomeDetail && input.outcomeType !== "extra_base_hit") {
+    res.status(400).json({ message: "outcomeDetail is only valid for extra_base_hit" });
+    return;
+  }
+
+  if (
+    input.playersLeftOnBase !== undefined &&
+    !(input.outcomeCategory === "defense" && LEFT_ON_BASE_ELIGIBLE.has(input.outcomeType))
+  ) {
+    res.status(400).json({
+      message: "playersLeftOnBase is only valid for ground_out, fly_out, double_play, or triple_play",
+    });
+    return;
+  }
+
+  const resultCategory = resultCategoryForOutcomeCategory(input.outcomeCategory);
+  const goodCount = resultCategory === "good" ? 1 : 0;
+  const badCount = resultCategory === "bad" ? 1 : 0;
+  const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
+
   const entry = {
     ...input,
     id: randomUUID(),
     createdAt: new Date().toISOString(),
-    resultCategory: resultCategoryFor(input.result),
-    delta: input.goodCount - input.badCount,
+    resultCategory,
+    goodCount,
+    badCount,
+    strikeoutCount,
+    delta: goodCount - badCount,
   };
 
   await appendEntry(entry);

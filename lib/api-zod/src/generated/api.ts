@@ -20,30 +20,24 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all pitch sequence entries, most recent first
  */
-
-export const listEntriesResponseOneGoodCountMin = 0;
-
-export const listEntriesResponseOneBadCountMin = 0;
-
-export const listEntriesResponseOneStrikeoutCountMin = 0;
-
-
-
 export const ListEntriesResponseItem = zod.object({
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string().min(1).describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
-  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']),
-  "goodCount": zod.number().min(listEntriesResponseOneGoodCountMin),
-  "badCount": zod.number().min(listEntriesResponseOneBadCountMin),
-  "strikeoutCount": zod.number().min(listEntriesResponseOneStrikeoutCountMin),
-  "notes": zod.string().optional()
-}).and(zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "resultCategory": zod.enum(['good', 'bad']),
-  "delta": zod.number()
-}))
+  "pitcherHandedness": zod.enum(['L', 'R']),
+  "batterHandedness": zod.enum(['L', 'R']),
+  "pitchSequence": zod.string(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
+  "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
+  "playersLeftOnBase": zod.number().optional(),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number(),
+  "badCount": zod.number(),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number(),
+  "notes": zod.string().optional()
+})
 export const ListEntriesResponse = zod.array(ListEntriesResponseItem)
 
 
@@ -51,11 +45,7 @@ export const ListEntriesResponse = zod.array(ListEntriesResponseItem)
  * @summary Record a new pitch sequence entry for a plate appearance
  */
 
-export const createEntryBodyGoodCountMin = 0;
-
-export const createEntryBodyBadCountMin = 0;
-
-export const createEntryBodyStrikeoutCountMin = 0;
+export const createEntryBodyPlayersLeftOnBaseMin = 0;
 
 
 
@@ -63,67 +53,55 @@ export const CreateEntryBody = zod.object({
   "pitcherHandedness": zod.enum(['L', 'R']),
   "batterHandedness": zod.enum(['L', 'R']),
   "pitchSequence": zod.string().min(1).describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
-  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']),
-  "goodCount": zod.number().min(createEntryBodyGoodCountMin),
-  "badCount": zod.number().min(createEntryBodyBadCountMin),
-  "strikeoutCount": zod.number().min(createEntryBodyStrikeoutCountMin),
+  "outcomeCategory": zod.enum(['defense', 'offense']).describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).describe('Specific outcome selected within a defense or offense branch'),
+  "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
+  "playersLeftOnBase": zod.number().min(createEntryBodyPlayersLeftOnBaseMin).optional().describe('Number of baserunners left on base, when applicable'),
   "notes": zod.string().optional()
 })
 
-
-export const createEntryResponseOneGoodCountMin = 0;
-
-export const createEntryResponseOneBadCountMin = 0;
-
-export const createEntryResponseOneStrikeoutCountMin = 0;
-
-
-
 export const CreateEntryResponse = zod.object({
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string().min(1).describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
-  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']),
-  "goodCount": zod.number().min(createEntryResponseOneGoodCountMin),
-  "badCount": zod.number().min(createEntryResponseOneBadCountMin),
-  "strikeoutCount": zod.number().min(createEntryResponseOneStrikeoutCountMin),
-  "notes": zod.string().optional()
-}).and(zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "resultCategory": zod.enum(['good', 'bad']),
-  "delta": zod.number()
-}))
+  "pitcherHandedness": zod.enum(['L', 'R']),
+  "batterHandedness": zod.enum(['L', 'R']),
+  "pitchSequence": zod.string(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
+  "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
+  "playersLeftOnBase": zod.number().optional(),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number(),
+  "badCount": zod.number(),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number(),
+  "notes": zod.string().optional()
+})
 
 
 /**
  * @summary Get dashboard aggregates across all recorded entries
  */
-
-export const getDashboardResponseRecentEntriesItemOneGoodCountMin = 0;
-
-export const getDashboardResponseRecentEntriesItemOneBadCountMin = 0;
-
-export const getDashboardResponseRecentEntriesItemOneStrikeoutCountMin = 0;
-
-
-
 export const GetDashboardResponse = zod.object({
   "recentEntries": zod.array(zod.object({
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string().min(1).describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
-  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']),
-  "goodCount": zod.number().min(getDashboardResponseRecentEntriesItemOneGoodCountMin),
-  "badCount": zod.number().min(getDashboardResponseRecentEntriesItemOneBadCountMin),
-  "strikeoutCount": zod.number().min(getDashboardResponseRecentEntriesItemOneStrikeoutCountMin),
-  "notes": zod.string().optional()
-}).and(zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "resultCategory": zod.enum(['good', 'bad']),
-  "delta": zod.number()
-}))),
+  "pitcherHandedness": zod.enum(['L', 'R']),
+  "batterHandedness": zod.enum(['L', 'R']),
+  "pitchSequence": zod.string(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
+  "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
+  "playersLeftOnBase": zod.number().optional(),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number(),
+  "badCount": zod.number(),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number(),
+  "notes": zod.string().optional()
+})),
   "bestSequences": zod.array(zod.object({
   "pitchSequence": zod.string(),
   "totalDelta": zod.number(),

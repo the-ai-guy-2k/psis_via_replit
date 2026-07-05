@@ -39,12 +39,57 @@ export const ResultOutcome = {
   pressure_error: 'pressure_error',
 } as const;
 
+/**
+ * Whether an entry favored the pitcher (good) or the batter (bad)
+ */
+export type ResultCategory = typeof ResultCategory[keyof typeof ResultCategory];
+
+
+export const ResultCategory = {
+  good: 'good',
+  bad: 'bad',
+} as const;
+
+/**
+ * Top-level branch of the at-bat outcome wizard
+ */
 export type OutcomeCategory = typeof OutcomeCategory[keyof typeof OutcomeCategory];
 
 
 export const OutcomeCategory = {
-  good: 'good',
-  bad: 'bad',
+  defense: 'defense',
+  offense: 'offense',
+} as const;
+
+/**
+ * Specific outcome selected within a defense or offense branch
+ */
+export type OutcomeType = typeof OutcomeType[keyof typeof OutcomeType];
+
+
+export const OutcomeType = {
+  strikeout: 'strikeout',
+  fly_out: 'fly_out',
+  ground_out: 'ground_out',
+  infield_catch: 'infield_catch',
+  double_play: 'double_play',
+  triple_play: 'triple_play',
+  run_scored: 'run_scored',
+  hit: 'hit',
+  walk: 'walk',
+  home_run: 'home_run',
+  extra_base_hit: 'extra_base_hit',
+} as const;
+
+/**
+ * Follow-up detail, currently only used for extra_base_hit
+ */
+export type OutcomeDetail = typeof OutcomeDetail[keyof typeof OutcomeDetail];
+
+
+export const OutcomeDetail = {
+  double: 'double',
+  triple: 'triple',
 } as const;
 
 export interface CreateEntryInput {
@@ -55,22 +100,36 @@ export interface CreateEntryInput {
      * @minLength 1
      */
   pitchSequence: string;
-  result: ResultOutcome;
-  /** @minimum 0 */
-  goodCount: number;
-  /** @minimum 0 */
-  badCount: number;
-  /** @minimum 0 */
-  strikeoutCount: number;
+  outcomeCategory: OutcomeCategory;
+  outcomeType: OutcomeType;
+  outcomeDetail?: OutcomeDetail;
+  /**
+     * Number of baserunners left on base, when applicable
+     * @minimum 0
+     */
+  playersLeftOnBase?: number;
   notes?: string;
 }
 
-export type Entry = CreateEntryInput & {
+export interface Entry {
   id: string;
   createdAt: string;
-  resultCategory: OutcomeCategory;
+  pitcherHandedness: Handedness;
+  batterHandedness: Handedness;
+  pitchSequence: string;
+  outcomeCategory?: OutcomeCategory;
+  outcomeType?: OutcomeType;
+  outcomeDetail?: OutcomeDetail;
+  playersLeftOnBase?: number;
+  /** Legacy flat outcome value, only present on entries created before the outcome wizard */
+  result?: ResultOutcome;
+  resultCategory: ResultCategory;
+  goodCount: number;
+  badCount: number;
+  strikeoutCount: number;
   delta: number;
-};
+  notes?: string;
+}
 
 export interface SequenceStat {
   pitchSequence: string;

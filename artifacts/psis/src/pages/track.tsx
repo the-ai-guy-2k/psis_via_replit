@@ -1,105 +1,129 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { 
-  useCreateEntry, 
-  useListEntries, 
+import {
+  useCreateEntry,
+  useListEntries,
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
-  ResultOutcome,
-  Handedness,
 } from "@workspace/api-client-react";
+import type { OutcomeCategory, OutcomeType, OutcomeDetail, Handedness } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Swords } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { describeOutcome, outcomesForCategory, outcomeAsksLeftOnBase } from "@/lib/outcome";
 
-const formSchema = z.object({
-  pitcherHandedness: z.enum(["L", "R"] as const, { required_error: "Required" }),
-  batterHandedness: z.enum(["L", "R"] as const, { required_error: "Required" }),
-  pitchSequence: z.string().min(1, "Pitch sequence is required"),
-  result: z.enum([
-    "strikeout", "ground_out", "fly_out", "pop_out", "double_play", "weak_contact", 
-    "hit", "walk", "home_run", "hard_contact", "run_scored", "pressure_error"
-  ] as const, { required_error: "Required" }),
-  goodCount: z.coerce.number().min(0),
-  badCount: z.coerce.number().min(0),
-  strikeoutCount: z.coerce.number().min(0),
-  notes: z.string().optional()
-});
+type WizardState = {
+  outcomeCategory?: OutcomeCategory;
+  outcomeType?: OutcomeType;
+  outcomeDetail?: OutcomeDetail;
+  hasPlayersLeftOnBase?: boolean;
+  playersLeftOnBase?: number;
+};
 
-type FormValues = z.infer<typeof formSchema>;
-
-const GOOD_OUTCOMES = ["strikeout", "ground_out", "fly_out", "pop_out", "double_play", "weak_contact"];
-const BAD_OUTCOMES = ["hit", "walk", "home_run", "hard_contact", "run_scored", "pressure_error"];
+const emptyWizard: WizardState = {};
 
 export default function Track() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const { data: entries, isLoading: entriesLoading } = useListEntries();
   const createEntry = useCreateEntry();
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      pitchSequence: "",
-      goodCount: 0,
-      badCount: 0,
-      strikeoutCount: 0,
-      notes: ""
-    }
-  });
+  const [pitcherHandedness, setPitcherHandedness] = useState<Handedness | undefined>();
+  const [batterHandedness, setBatterHandedness] = useState<Handedness | undefined>();
+  const [pitchSequence, setPitchSequence] = useState("");
+  const [notes, setNotes] = useState("");
+  const [wizard, setWizard] = useState<WizardState>(emptyWizard);
 
-  const onSubmit = (data: FormValues) => {
-    createEntry.mutate({
-      data: {
-        pitcherHandedness: data.pitcherHandedness,
-        batterHandedness: data.batterHandedness,
-        pitchSequence: data.pitchSequence,
-        result: data.result,
-        goodCount: data.goodCount,
-        badCount: data.badCount,
-        strikeoutCount: data.strikeoutCount,
-        notes: data.notes || undefined
-      }
-    }, {
-      onSuccess: (newEntry) => {
-        toast({
-          title: "Entry Logged",
-          description: `Sequence ${newEntry.pitchSequence} recorded successfully.`,
-        });
-        form.reset({
-          pitcherHandedness: data.pitcherHandedness, // keep context
-          batterHandedness: data.batterHandedness,
-          pitchSequence: "",
-          result: undefined as any,
-          goodCount: 0,
-          badCount: 0,
-          strikeoutCount: 0,
-          notes: ""
-        });
-        queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+  const showLeftOnBaseQuestion = outcomeAsksLeftOnBase(wizard.outcomeCategory, wizard.outcomeType);
+  const showExtraBaseHitDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "extra_base_hit";
+
+  const selectCategory = (category: OutcomeCategory) => {
+    setWizard({ outcomeCategory: category });
+  };
+
+  const selectOutcomeType = (type: OutcomeType) => {
+    setWizard(prev => ({
+      outcomeCategory: prev.outcomeCategory,
+      outcomeType: type,
+    }));
+  };
+
+  const selectOutcomeDetail = (detail: OutcomeDetail) => {
+    setWizard(prev => ({ ...prev, outcomeDetail: detail }));
+  };
+
+  const selectHasPlayersLeftOnBase = (hasPlayers: boolean) => {
+    setWizard(prev => ({
+      ...prev,
+      hasPlayersLeftOnBase: hasPlayers,
+      playersLeftOnBase: hasPlayers ? prev.playersLeftOnBase : undefined,
+    }));
+  };
+
+  const isWizardComplete =
+    !!wizard.outcomeCategory &&
+    !!wizard.outcomeType &&
+    (!showExtraBaseHitDetail || !!wizard.outcomeDetail) &&
+    (!showLeftOnBaseQuestion ||
+      wizard.hasPlayersLeftOnBase === false ||
+      (wizard.hasPlayersLeftOnBase === true && wizard.playersLeftOnBase !== undefined && wizard.playersLeftOnBase >= 0));
+
+  const isFormComplete =
+    !!pitcherHandedness && !!batterHandedness && pitchSequence.trim().length > 0 && isWizardComplete;
+
+  const resetForm = () => {
+    setPitchSequence("");
+    setNotes("");
+    setWizard(emptyWizard);
+  };
+
+  const onSubmit = () => {
+    if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType || !pitcherHandedness || !batterHandedness) {
+      return;
+    }
+
+    createEntry.mutate(
+      {
+        data: {
+          pitcherHandedness,
+          batterHandedness,
+          pitchSequence,
+          outcomeCategory: wizard.outcomeCategory,
+          outcomeType: wizard.outcomeType,
+          outcomeDetail: wizard.outcomeDetail,
+          playersLeftOnBase: wizard.hasPlayersLeftOnBase ? wizard.playersLeftOnBase : undefined,
+          notes: notes || undefined,
+        },
       },
-      onError: () => {
-        toast({
-          title: "Error",
-          description: "Failed to log entry.",
-          variant: "destructive"
-        });
-      }
-    });
+      {
+        onSuccess: newEntry => {
+          toast({
+            title: "Entry Logged",
+            description: `Sequence ${newEntry.pitchSequence} recorded successfully.`,
+          });
+          resetForm();
+          queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        },
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to log entry.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   const recentEntry = entries?.[0];
@@ -112,180 +136,218 @@ export default function Track() {
             <CardTitle className="uppercase tracking-wider">Log Plate Appearance</CardTitle>
             <CardDescription>Record pitch sequencing and immediate outcome.</CardDescription>
           </CardHeader>
-          <CardContent className="pt-6">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="pitcherHandedness"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Pitcher</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-pitcher" className="rounded-sm">
-                              <SelectValue placeholder="Handedness" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="R">Right (R)</SelectItem>
-                            <SelectItem value="L">Left (L)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="batterHandedness"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Batter</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-batter" className="rounded-sm">
-                              <SelectValue placeholder="Handedness" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="R">Right (R)</SelectItem>
-                            <SelectItem value="L">Left (L)</SelectItem>
-                            <SelectItem value="S">Switch (S)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+          <CardContent className="pt-6 space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Pitcher</Label>
+                <Select onValueChange={v => setPitcherHandedness(v as Handedness)} value={pitcherHandedness}>
+                  <SelectTrigger data-testid="select-pitcher" className="rounded-sm">
+                    <SelectValue placeholder="Handedness" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="R">Right (R)</SelectItem>
+                    <SelectItem value="L">Left (L)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Batter</Label>
+                <Select onValueChange={v => setBatterHandedness(v as Handedness)} value={batterHandedness}>
+                  <SelectTrigger data-testid="select-batter" className="rounded-sm">
+                    <SelectValue placeholder="Handedness" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="R">Right (R)</SelectItem>
+                    <SelectItem value="L">Left (L)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                <FormField
-                  control={form.control}
-                  name="pitchSequence"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sequence (e.g. FB-SL-CH)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="FB-SL-CH" className="font-mono uppercase rounded-sm" {...field} data-testid="input-sequence" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="space-y-2">
+              <Label>Sequence (e.g. FB-SL-CH)</Label>
+              <Input
+                placeholder="FB-SL-CH"
+                className="font-mono uppercase rounded-sm"
+                value={pitchSequence}
+                onChange={e => setPitchSequence(e.target.value)}
+                data-testid="input-sequence"
+              />
+            </div>
 
-                <FormField
-                  control={form.control}
-                  name="result"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>PA Result</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-result" className="rounded-sm">
-                            <SelectValue placeholder="Select outcome" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">Good Outcomes</div>
-                          {GOOD_OUTCOMES.map(r => (
-                            <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>
-                          ))}
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase border-t mt-1">Bad Outcomes</div>
-                          {BAD_OUTCOMES.map(r => (
-                            <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <Separator />
 
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="goodCount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Good</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={0} className="font-mono rounded-sm" {...field} data-testid="input-good" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="badCount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bad</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={0} className="font-mono rounded-sm" {...field} data-testid="input-bad" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="strikeoutCount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Strikeouts</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={0} className="font-mono rounded-sm" {...field} data-testid="input-k" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Any mechanical or situational observations..." className="resize-none rounded-sm" {...field} data-testid="input-notes" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button 
-                  type="submit" 
-                  className="w-full rounded-none font-bold uppercase tracking-wider" 
-                  disabled={createEntry.isPending}
-                  data-testid="btn-submit-entry"
+            <div className="space-y-4">
+              <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => selectCategory("defense")}
+                  data-testid="btn-category-defense"
+                  className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
+                    wizard.outcomeCategory === "defense"
+                      ? "border-success bg-success/10 text-success"
+                      : "border-border hover:border-success/50"
+                  }`}
                 >
-                  {createEntry.isPending ? "Logging..." : "Log PA Entry"}
-                </Button>
-              </form>
-            </Form>
+                  <ShieldCheck className="w-4 h-4" />
+                  Defense
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectCategory("offense")}
+                  data-testid="btn-category-offense"
+                  className={`flex items-center justify-center gap-2 border-2 rounded-sm py-4 font-bold uppercase tracking-wider transition-colors ${
+                    wizard.outcomeCategory === "offense"
+                      ? "border-destructive bg-destructive/10 text-destructive"
+                      : "border-border hover:border-destructive/50"
+                  }`}
+                >
+                  <Swords className="w-4 h-4" />
+                  Offense
+                </button>
+              </div>
+            </div>
+
+            {wizard.outcomeCategory && (
+              <div className="space-y-2">
+                <Label className="uppercase tracking-wider text-xs text-muted-foreground">
+                  Step 2 — {wizard.outcomeCategory === "defense" ? "Defensive" : "Offensive"} Outcome
+                </Label>
+                <Select
+                  onValueChange={v => selectOutcomeType(v as OutcomeType)}
+                  value={wizard.outcomeType}
+                >
+                  <SelectTrigger data-testid="select-outcome-type" className="rounded-sm">
+                    <SelectValue placeholder="Select specific outcome" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outcomesForCategory(wizard.outcomeCategory).map(o => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {showExtraBaseHitDetail && (
+              <div className="space-y-2">
+                <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 3 — Extra Base Hit Detail</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => selectOutcomeDetail("double")}
+                    data-testid="btn-detail-double"
+                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                      wizard.outcomeDetail === "double" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    Double
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectOutcomeDetail("triple")}
+                    data-testid="btn-detail-triple"
+                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                      wizard.outcomeDetail === "triple" ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    Triple
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showLeftOnBaseQuestion && (
+              <div className="space-y-3">
+                <Label className="uppercase tracking-wider text-xs text-muted-foreground">Players left on base?</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => selectHasPlayersLeftOnBase(true)}
+                    data-testid="btn-lob-yes"
+                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                      wizard.hasPlayersLeftOnBase === true ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectHasPlayersLeftOnBase(false)}
+                    data-testid="btn-lob-no"
+                    className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors ${
+                      wizard.hasPlayersLeftOnBase === false ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+                {wizard.hasPlayersLeftOnBase === true && (
+                  <div className="space-y-2 pt-1">
+                    <Label>How many?</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={3}
+                      className="font-mono rounded-sm w-32"
+                      value={wizard.playersLeftOnBase ?? ""}
+                      onChange={e =>
+                        setWizard(prev => ({
+                          ...prev,
+                          playersLeftOnBase: e.target.value === "" ? undefined : Number(e.target.value),
+                        }))
+                      }
+                      data-testid="input-players-left-on-base"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                placeholder="Any mechanical or situational observations..."
+                className="resize-none rounded-sm"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                data-testid="input-notes"
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={onSubmit}
+              className="w-full rounded-none font-bold uppercase tracking-wider"
+              disabled={!isFormComplete || createEntry.isPending}
+              data-testid="btn-submit-entry"
+            >
+              {createEntry.isPending ? "Logging..." : "Log PA Entry"}
+            </Button>
           </CardContent>
         </Card>
 
         {recentEntry && (
-          <Alert className={recentEntry.resultCategory === 'good' ? 'border-success bg-success/5' : 'border-destructive bg-destructive/5'}>
-            {recentEntry.resultCategory === 'good' ? <CheckCircle2 className="w-4 h-4 text-success" /> : <AlertCircle className="w-4 h-4 text-destructive" />}
-            <AlertTitle className="uppercase tracking-wider font-bold">
-              Last Entry: {recentEntry.pitchSequence}
-            </AlertTitle>
+          <Alert className={recentEntry.resultCategory === "good" ? "border-success bg-success/5" : "border-destructive bg-destructive/5"}>
+            {recentEntry.resultCategory === "good" ? (
+              <CheckCircle2 className="w-4 h-4 text-success" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-destructive" />
+            )}
+            <AlertTitle className="uppercase tracking-wider font-bold">Last Entry: {recentEntry.pitchSequence}</AlertTitle>
             <AlertDescription className="font-mono text-sm mt-2">
-              <div className="flex gap-4">
-                <span>Good: {recentEntry.goodCount}</span>
-                <span>Bad: {recentEntry.badCount}</span>
+              <div className="flex flex-wrap gap-4">
+                <span className="capitalize">{describeOutcome(recentEntry)}</span>
                 <span className={recentEntry.delta > 0 ? "text-success font-bold" : recentEntry.delta < 0 ? "text-destructive font-bold" : ""}>
-                  Delta: {recentEntry.delta > 0 ? '+' : ''}{recentEntry.delta}
+                  Delta: {recentEntry.delta > 0 ? "+" : ""}
+                  {recentEntry.delta}
                 </span>
-                <span>K: {recentEntry.strikeoutCount}</span>
+                {recentEntry.playersLeftOnBase !== undefined && <span>LOB: {recentEntry.playersLeftOnBase}</span>}
               </div>
             </AlertDescription>
           </Alert>
@@ -300,28 +362,38 @@ export default function Track() {
           </CardHeader>
           <CardContent className="px-0 space-y-4">
             {entriesLoading ? (
-              Array(5).fill(0).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-sm" />
-              ))
+              Array(5)
+                .fill(0)
+                .map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-sm" />)
             ) : entries?.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-8">No entries logged yet.</div>
             ) : (
               entries?.slice(0, 8).map(entry => (
-                <div key={entry.id} className="flex justify-between items-center bg-card border p-3 rounded-sm text-sm" data-testid={`log-entry-${entry.id}`}>
+                <div
+                  key={entry.id}
+                  className="flex justify-between items-center bg-card border p-3 rounded-sm text-sm"
+                  data-testid={`log-entry-${entry.id}`}
+                >
                   <div>
                     <div className="font-mono font-bold uppercase">{entry.pitchSequence}</div>
                     <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                      <span className="font-semibold">{entry.pitcherHandedness}v{entry.batterHandedness}</span>
+                      <span className="font-semibold">
+                        {entry.pitcherHandedness}v{entry.batterHandedness}
+                      </span>
                       <span>•</span>
-                      <span className="capitalize">{entry.result.replace("_", " ")}</span>
+                      <span className="capitalize">{describeOutcome(entry)}</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <Badge variant={entry.resultCategory === 'good' ? "default" : "destructive"} className="rounded-sm px-1.5 py-0 text-[10px] uppercase tracking-wider bg-opacity-10">
+                    <Badge
+                      variant={entry.resultCategory === "good" ? "default" : "destructive"}
+                      className="rounded-sm px-1.5 py-0 text-[10px] uppercase tracking-wider bg-opacity-10"
+                    >
                       {entry.resultCategory}
                     </Badge>
                     <div className="font-mono text-xs mt-1 text-muted-foreground">
-                      Δ {entry.delta > 0 ? '+' : ''}{entry.delta}
+                      Δ {entry.delta > 0 ? "+" : ""}
+                      {entry.delta}
                     </div>
                   </div>
                 </div>

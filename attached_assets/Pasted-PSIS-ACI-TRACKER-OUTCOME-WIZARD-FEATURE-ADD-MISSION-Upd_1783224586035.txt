@@ -1,0 +1,226 @@
+PSIS ACI — TRACKER OUTCOME WIZARD FEATURE ADD
+
+MISSION
+
+Update the PSIS Tracker section so at-bat outcome entry uses the approved GVCA decision-tree workflow instead of a flat outcome selector.
+
+The goal is to make outcome entry faster, cleaner, and closer to how a coach thinks during an at-bat.
+
+==================================================
+CURRENT TRUTH
+==================================================
+
+PSIS already has a working MVP with:
+
+- Tracker section
+- At-bat entry
+- Outcome capture
+- Good-minus-Bad Delta calculation
+- Dashboard summaries
+- JSON persistence
+
+The current outcome workflow needs to be changed to a guided decision tree.
+
+==================================================
+FEATURE TO IMPLEMENT
+==================================================
+
+Replace the current flat outcome input with this wizard flow:
+
+Outcome
+↓
+Defense or Offense
+↓
+Specific outcome
+↓
+Conditional follow-up questions
+↓
+Save at-bat
+
+==================================================
+REQUIRED USER FLOW
+==================================================
+
+STEP 1 — OUTCOME CATEGORY
+
+User selects one:
+
+- Defense
+- Offense
+
+==================================================
+DEFENSE BRANCH
+==================================================
+
+If Defense is selected, show only:
+
+- Strikeout
+- Fly Out
+- Ground Out
+- Infield Catch
+- Double Play
+- Triple Play
+
+Then conditionally ask:
+
+For Ground Out:
+- Players left on base? Yes / No
+- If Yes, how many?
+
+For Fly Out:
+- Players left on base? Yes / No
+- If Yes, how many?
+
+For Double Play:
+- Players left on base? Yes / No
+- If Yes, how many?
+
+For Triple Play:
+- Players left on base? Yes / No
+- If Yes, how many?
+
+Do not show offensive outcomes inside the Defense branch.
+
+==================================================
+OFFENSE BRANCH
+==================================================
+
+If Offense is selected, show only:
+
+- Run Scored
+- Hit
+- Walk
+- Home Run
+- Extra Base Hit
+
+If Extra Base Hit is selected, ask:
+
+- Double
+- Triple
+
+Do not show defensive outcomes inside the Offense branch.
+
+==================================================
+DATA REQUIREMENTS
+==================================================
+
+Each saved at-bat should preserve:
+
+- outcomeCategory: defense | offense
+- outcomeType
+- outcomeDetail if needed
+- playersLeftOnBase if applicable
+- existing pitch sequence data
+- existing batter handedness data
+- existing inning/game fields
+- existing delta calculation support
+
+Do not break existing stored entries.
+
+If older entries do not have the new fields, the app must still display them safely.
+
+==================================================
+IMPLEMENTATION GUIDANCE
+==================================================
+
+Update the Tracker UI only.
+
+Prefer a simple state-driven React component.
+
+Suggested state:
+
+- selectedOutcomeCategory
+- selectedOutcomeType
+- selectedOutcomeDetail
+- playersLeftOnBase
+- showLeftOnBaseQuestion
+
+The UI should reveal the next step only after the previous choice is made.
+
+Avoid overbuilding.
+
+No animations required.
+No AI required.
+No authentication required.
+No database migration required unless absolutely necessary.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Tracker section no longer uses one flat list for all outcomes.
+
+2. User must first choose Defense or Offense.
+
+3. Defense branch only shows defensive outcomes.
+
+4. Offense branch only shows offensive outcomes.
+
+5. Extra Base Hit correctly branches to Double or Triple.
+
+6. Applicable defensive outcomes ask about players left on base.
+
+7. At-bat saves successfully.
+
+8. Dashboard and sequence statistics still work.
+
+9. Existing entries still render without crashing.
+
+10. App runs successfully in Replit.
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Login
+- User accounts
+- AI recommendations
+- Cloud database
+- Advanced reports
+- Coach/player roles
+- Full Diamond IQ platform features
+- New deployment pipeline
+
+This ACI is only for the Tracker outcome wizard feature.
+
+==================================================
+VALIDATION COMMANDS
+==================================================
+
+Run the app using the existing Replit workflow.
+
+Then validate manually:
+
+1. Create an at-bat with Defense → Strikeout.
+2. Create an at-bat with Defense → Ground Out → players left on base.
+3. Create an at-bat with Offense → Walk.
+4. Create an at-bat with Offense → Extra Base Hit → Double.
+5. Confirm entries appear in recent entries.
+6. Confirm dashboard/stat calculations still load.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, return:
+
+1. Files changed
+2. Summary of UI changes
+3. Data fields added or changed
+4. Validation results
+5. Any issues or assumptions
+6. Whether acceptance criteria passed
+
+==================================================
+FINAL STATUS OPTIONS
+==================================================
+
+Return one:
+
+PASS
+PARTIAL PASS
+FAIL

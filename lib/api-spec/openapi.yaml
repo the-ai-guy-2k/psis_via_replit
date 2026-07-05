@@ -111,9 +111,33 @@ components:
         - hard_contact
         - run_scored
         - pressure_error
-    OutcomeCategory:
+    ResultCategory:
       type: string
       enum: [good, bad]
+      description: Whether an entry favored the pitcher (good) or the batter (bad)
+    OutcomeCategory:
+      type: string
+      enum: [defense, offense]
+      description: Top-level branch of the at-bat outcome wizard
+    OutcomeType:
+      type: string
+      description: Specific outcome selected within a defense or offense branch
+      enum:
+        - strikeout
+        - fly_out
+        - ground_out
+        - infield_catch
+        - double_play
+        - triple_play
+        - run_scored
+        - hit
+        - walk
+        - home_run
+        - extra_base_hit
+    OutcomeDetail:
+      type: string
+      description: Follow-up detail, currently only used for extra_base_hit
+      enum: [double, triple]
     CreateEntryInput:
       type: object
       properties:
@@ -125,45 +149,71 @@ components:
           type: string
           minLength: 1
           description: The sequence of pitches thrown, e.g. "FB-SL-CH"
-        result:
-          $ref: "#/components/schemas/ResultOutcome"
-        goodCount:
+        outcomeCategory:
+          $ref: "#/components/schemas/OutcomeCategory"
+        outcomeType:
+          $ref: "#/components/schemas/OutcomeType"
+        outcomeDetail:
+          $ref: "#/components/schemas/OutcomeDetail"
+        playersLeftOnBase:
           type: integer
           minimum: 0
-        badCount:
-          type: integer
-          minimum: 0
-        strikeoutCount:
-          type: integer
-          minimum: 0
+          description: Number of baserunners left on base, when applicable
         notes:
           type: string
       required:
         - pitcherHandedness
         - batterHandedness
         - pitchSequence
-        - result
+        - outcomeCategory
+        - outcomeType
+    Entry:
+      type: object
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+        pitcherHandedness:
+          $ref: "#/components/schemas/Handedness"
+        batterHandedness:
+          $ref: "#/components/schemas/Handedness"
+        pitchSequence:
+          type: string
+        outcomeCategory:
+          $ref: "#/components/schemas/OutcomeCategory"
+        outcomeType:
+          $ref: "#/components/schemas/OutcomeType"
+        outcomeDetail:
+          $ref: "#/components/schemas/OutcomeDetail"
+        playersLeftOnBase:
+          type: integer
+        result:
+          $ref: "#/components/schemas/ResultOutcome"
+          description: Legacy flat outcome value, only present on entries created before the outcome wizard
+        resultCategory:
+          $ref: "#/components/schemas/ResultCategory"
+        goodCount:
+          type: integer
+        badCount:
+          type: integer
+        strikeoutCount:
+          type: integer
+        delta:
+          type: integer
+        notes:
+          type: string
+      required:
+        - id
+        - createdAt
+        - pitcherHandedness
+        - batterHandedness
+        - pitchSequence
+        - resultCategory
         - goodCount
         - badCount
         - strikeoutCount
-    Entry:
-      allOf:
-        - $ref: "#/components/schemas/CreateEntryInput"
-        - type: object
-          properties:
-            id:
-              type: string
-            createdAt:
-              type: string
-            resultCategory:
-              $ref: "#/components/schemas/OutcomeCategory"
-            delta:
-              type: integer
-          required:
-            - id
-            - createdAt
-            - resultCategory
-            - delta
+        - delta
     SequenceStat:
       type: object
       properties:

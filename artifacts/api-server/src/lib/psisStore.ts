@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Entry, ResultOutcome } from "@workspace/api-zod";
+import type { Entry, ResultOutcome, OutcomeCategory } from "@workspace/api-zod";
 import { logger } from "./logger";
 
 const GOOD_RESULTS: ResultOutcome[] = [
@@ -21,6 +21,10 @@ const dataFile = path.resolve(dataDir, "psis_entries.json");
 
 export function resultCategoryFor(result: ResultOutcome): "good" | "bad" {
   return GOOD_RESULTS.includes(result) ? "good" : "bad";
+}
+
+export function resultCategoryForOutcomeCategory(outcomeCategory: OutcomeCategory): "good" | "bad" {
+  return outcomeCategory === "defense" ? "good" : "bad";
 }
 
 async function ensureDataFile(): Promise<void> {

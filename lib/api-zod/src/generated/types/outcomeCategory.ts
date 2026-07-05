@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Top-level branch of the at-bat outcome wizard
+ */
 export type OutcomeCategory = typeof OutcomeCategory[keyof typeof OutcomeCategory];
 
 
 export const OutcomeCategory = {
-  good: 'good',
-  bad: 'bad',
+  defense: 'defense',
+  offense: 'offense',
 } as const;

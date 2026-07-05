@@ -31,13 +31,15 @@ A web tool for baseball pitching coaches to log pitch sequences per plate appear
 ## Architecture decisions
 
 - **Original spec asked for Python/Flask + a JSON file, but this workspace only supports pnpm/TypeScript artifacts (React+Vite / Express).** Rebuilt the same functionality on the supported stack: React+Vite frontend + Express backend, keeping the JSON-file storage intent (no Postgres) since the original spec emphasized simplest possible storage.
-- Result categorization is fixed server-side: GOOD = strikeout, ground_out, fly_out, pop_out, double_play, weak_contact; BAD = hit, walk, home_run, hard_contact, run_scored, pressure_error. Delta = goodCount − badCount, computed on the server at entry-creation time.
+- **Outcome Wizard**: entries are logged through a guided decision tree instead of a flat outcome dropdown — Step 1: outcomeCategory (`defense`/`offense`), Step 2: outcomeType (specific outcome), Step 3 (conditional): `playersLeftOnBase` for fly_out/ground_out/double_play/triple_play, or `outcomeDetail` (double/triple) for extra_base_hit. See `artifacts/psis/src/lib/outcome.ts` for the wizard option lists and shared outcome-label rendering (`describeOutcome`), used by both Tracker and Dashboard so old and new entries render consistently.
+- `resultCategory`/`goodCount`/`badCount`/`strikeoutCount`/`delta` are always server-computed at entry-creation time (never accepted from the client): `resultCategory` = "good" if `outcomeCategory === "defense"` else "bad"; `strikeoutCount` = 1 only if `outcomeType === "strikeout"`; `delta` = goodCount − badCount.
+- **Backward compatibility**: entries created before the Outcome Wizard existed only have the legacy flat `result` field (no `outcomeCategory`/`outcomeType`). The `Entry` schema keeps both `result` (legacy, optional) and `outcomeCategory`/`outcomeType`/`outcomeDetail`/`playersLeftOnBase` (wizard, optional) so both shapes validate; always render outcome text via `describeOutcome()`, never read `entry.result` or `entry.outcomeType` directly in UI code.
 - Best/worst sequence rankings are computed on read (grouped by exact pitch sequence string, e.g. `FB-SL-CH`), not stored — cheap given expected data volume for a single team/season.
 
 ## Product
 
 - **Home** — landing page explaining PSIS.
-- **Tracker** (`/track`) — log a plate appearance: pitcher/batter handedness, pitch sequence string, outcome, good/bad/strikeout counts, notes. Shows a running "recent log" sidebar.
+- **Tracker** (`/track`) — log a plate appearance: pitcher/batter handedness, pitch sequence string, then the Outcome Wizard (Defense/Offense → specific outcome → conditional follow-up), notes. Shows a running "recent log" sidebar.
 - **Dashboard** (`/dashboard`) — entry count, total good/bad, average delta, top 5 / bottom 5 pitch sequences by average delta, and a recent entries table.
 
 ## User preferences

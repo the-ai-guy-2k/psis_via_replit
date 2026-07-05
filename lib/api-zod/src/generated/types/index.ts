@@ -13,5 +13,8 @@ export * from './errorResponse';
 export * from './handedness';
 export * from './healthStatus';
 export * from './outcomeCategory';
+export * from './outcomeDetail';
+export * from './outcomeType';
+export * from './resultCategory';
 export * from './resultOutcome';
 export * from './sequenceStat';

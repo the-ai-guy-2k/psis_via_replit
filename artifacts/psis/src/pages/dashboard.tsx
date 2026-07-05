@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Target, CheckCircle2, XCircle, ActivitySquare } from "lucide-react";
+import { describeOutcome } from "@/lib/outcome";
 
 export default function Dashboard() {
   const { data: dashboard, isLoading } = useGetDashboard();
@@ -189,7 +190,7 @@ export default function Dashboard() {
                         <Badge variant={entry.resultCategory === 'good' ? "default" : "destructive"} className="rounded-sm px-1.5 py-0 text-[10px] uppercase tracking-wider">
                           {entry.resultCategory}
                         </Badge>
-                        <span className="text-sm capitalize">{entry.result.replace("_", " ")}</span>
+                        <span className="text-sm capitalize">{describeOutcome(entry)}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">

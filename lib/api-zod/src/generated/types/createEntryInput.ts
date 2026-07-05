@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Handedness } from './handedness';
-import type { ResultOutcome } from './resultOutcome';
+import type { OutcomeCategory } from './outcomeCategory';
+import type { OutcomeDetail } from './outcomeDetail';
+import type { OutcomeType } from './outcomeType';
 
 export interface CreateEntryInput {
   pitcherHandedness: Handedness;
@@ -16,12 +18,13 @@ export interface CreateEntryInput {
      * @minLength 1
      */
   pitchSequence: string;
-  result: ResultOutcome;
-  /** @minimum 0 */
-  goodCount: number;
-  /** @minimum 0 */
-  badCount: number;
-  /** @minimum 0 */
-  strikeoutCount: number;
+  outcomeCategory: OutcomeCategory;
+  outcomeType: OutcomeType;
+  outcomeDetail?: OutcomeDetail;
+  /**
+     * Number of baserunners left on base, when applicable
+     * @minimum 0
+     */
+  playersLeftOnBase?: number;
   notes?: string;
 }

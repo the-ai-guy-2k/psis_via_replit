@@ -5,12 +5,29 @@
  * PSIS - Pitch Sequence Intelligence System API
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateEntryInput } from './createEntryInput';
+import type { Handedness } from './handedness';
 import type { OutcomeCategory } from './outcomeCategory';
+import type { OutcomeDetail } from './outcomeDetail';
+import type { OutcomeType } from './outcomeType';
+import type { ResultCategory } from './resultCategory';
+import type { ResultOutcome } from './resultOutcome';
 
-export type Entry = CreateEntryInput & {
+export interface Entry {
   id: string;
   createdAt: string;
-  resultCategory: OutcomeCategory;
+  pitcherHandedness: Handedness;
+  batterHandedness: Handedness;
+  pitchSequence: string;
+  outcomeCategory?: OutcomeCategory;
+  outcomeType?: OutcomeType;
+  outcomeDetail?: OutcomeDetail;
+  playersLeftOnBase?: number;
+  /** Legacy flat outcome value, only present on entries created before the outcome wizard */
+  result?: ResultOutcome;
+  resultCategory: ResultCategory;
+  goodCount: number;
+  badCount: number;
+  strikeoutCount: number;
   delta: number;
-};
+  notes?: string;
+}
