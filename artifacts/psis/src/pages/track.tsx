@@ -44,7 +44,8 @@ export default function Track() {
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
   const [acknowledgedInning, setAcknowledgedInning] = useState<number | undefined>(undefined);
-  const [lobAwaitingCount, setLobAwaitingCount] = useState(false);
+  const [lobHasPlayers, setLobHasPlayers] = useState<boolean | undefined>(undefined);
+  const [lobCount, setLobCount] = useState<number | undefined>(undefined);
 
   const showExtraBaseHitDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "extra_base_hit";
   const showRunsScoredDetail = wizard.outcomeCategory === "offense" && wizard.outcomeType === "run_scored";
@@ -104,7 +105,8 @@ export default function Track() {
           });
           resetForm();
           setAcknowledgedInning(undefined);
-          setLobAwaitingCount(false);
+          setLobHasPlayers(undefined);
+          setLobCount(undefined);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
@@ -129,15 +131,33 @@ export default function Track() {
   const displayDelta = waitingForNextInning ? 0 : inning?.inningDelta ?? 0;
 
   const lastAtBat = inning?.atBats[inning.atBats.length - 1];
-  const needsLobAnswer = showCompletedSummary && !!lastAtBat && lastAtBat.playersLeftOnBase === undefined;
+  const pendingEndInning = showCompletedSummary && !!lastAtBat && lastAtBat.playersLeftOnBase === undefined;
 
-  const submitLob = (count: number) => {
-    if (!lastAtBat) return;
+  const isLobAnswerComplete = lobHasPlayers === false || (lobHasPlayers === true && lobCount !== undefined);
+
+  const selectLobNo = () => {
+    setLobHasPlayers(false);
+    setLobCount(undefined);
+  };
+
+  const selectLobYes = () => {
+    setLobHasPlayers(true);
+    setLobCount(undefined);
+  };
+
+  const selectLobCount = (count: number) => {
+    setLobCount(count);
+  };
+
+  const endInning = () => {
+    if (!lastAtBat || !isLobAnswerComplete) return;
+    const count = lobHasPlayers ? (lobCount ?? 0) : 0;
     updateEntry.mutate(
       { id: lastAtBat.id, data: { playersLeftOnBase: count } },
       {
         onSuccess: () => {
-          setLobAwaitingCount(false);
+          setLobHasPlayers(undefined);
+          setLobCount(undefined);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
@@ -145,7 +165,7 @@ export default function Track() {
         onError: () => {
           toast({
             title: "Error",
-            description: "Failed to record runners left on base.",
+            description: "Failed to end the inning.",
             variant: "destructive",
           });
         },
@@ -210,92 +230,81 @@ export default function Track() {
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             {showCompletedSummary && inning ? (
-              <div className="space-y-4" data-testid="inning-summary">
-                <div className="flex items-center gap-2 text-success">
-                  <PartyPopper className="w-5 h-5" />
-                  <span className="font-bold uppercase tracking-wider">Inning {inning.inningNumber} Complete</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">At-Bats</div>
-                    <div className="font-mono font-bold text-xl" data-testid="summary-total-at-bats">
-                      {inning.totalAtBats}
+              pendingEndInning ? (
+                <div className="space-y-4" data-testid="inning-summary">
+                  <div className="flex items-center gap-2 text-primary">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="font-bold uppercase tracking-wider">
+                      Inning {inning.inningNumber} — 3 Outs. Confirm To End.
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
+                      <div className="font-mono font-bold text-xl">{inning.inningNumber}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
+                      <div className="font-mono font-bold text-xl">{inning.outs} / 3</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good Outcomes</div>
+                      <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad Outcomes</div>
+                      <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
+                      <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
+                        {inning.runsScored}
+                      </div>
                     </div>
                   </div>
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Defensive Outs</div>
-                    <div className="font-mono font-bold text-xl">{inning.outs}</div>
-                  </div>
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good</div>
-                    <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
-                  </div>
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad</div>
-                    <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
-                  </div>
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
-                    <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
-                      {inning.runsScored}
-                    </div>
-                  </div>
-                  <div className="bg-muted/50 rounded-sm p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runners Left On Base</div>
-                    <div className="font-mono font-bold text-xl" data-testid="summary-players-left-on-base">
-                      {needsLobAnswer ? "—" : inning.playersLeftOnBase}
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
-                  <span className="uppercase tracking-wider text-xs text-muted-foreground font-semibold">Final Inning Delta</span>
-                  <span
-                    className={`font-mono font-bold text-2xl ${inning.inningDelta > 0 ? "text-success" : inning.inningDelta < 0 ? "text-destructive" : ""}`}
-                    data-testid="summary-inning-delta"
-                  >
-                    {inning.inningDelta > 0 ? "+" : ""}
-                    {inning.inningDelta}
-                  </span>
-                </div>
 
-                {needsLobAnswer ? (
                   <div className="border-2 border-primary/30 rounded-sm p-4 space-y-3" data-testid="lob-question">
                     <Label className="uppercase tracking-wider text-xs text-muted-foreground">
-                      Were there any runners left on base?
+                      Are there players left on base?
                     </Label>
-                    {!lobAwaitingCount ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        <button
-                          type="button"
-                          onClick={() => submitLob(0)}
-                          disabled={updateEntry.isPending}
-                          data-testid="btn-lob-inning-no"
-                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
-                        >
-                          No
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLobAwaitingCount(true)}
-                          disabled={updateEntry.isPending}
-                          data-testid="btn-lob-inning-yes"
-                          className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
-                        >
-                          Yes
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">How many runners were left on base?</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={selectLobNo}
+                        disabled={updateEntry.isPending}
+                        data-testid="btn-lob-inning-no"
+                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+                          lobHasPlayers === false ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={selectLobYes}
+                        disabled={updateEntry.isPending}
+                        data-testid="btn-lob-inning-yes"
+                        className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+                          lobHasPlayers === true ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        Yes
+                      </button>
+                    </div>
+                    {lobHasPlayers === true && (
+                      <div className="space-y-2 pt-1">
+                        <Label className="text-xs text-muted-foreground">How many players were left on base?</Label>
                         <div className="grid grid-cols-3 gap-4">
                           {[1, 2, 3].map(n => (
                             <button
                               key={n}
                               type="button"
-                              onClick={() => submitLob(n)}
+                              onClick={() => selectLobCount(n)}
                               disabled={updateEntry.isPending}
                               data-testid={`btn-lob-count-${n}`}
-                              className="border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors border-border hover:border-primary/50 disabled:opacity-50"
+                              className={`border-2 rounded-sm py-3 font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+                                lobCount === n ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+                              }`}
                             >
                               {n}
                             </button>
@@ -304,7 +313,66 @@ export default function Track() {
                       </div>
                     )}
                   </div>
-                ) : (
+
+                  <Button
+                    type="button"
+                    onClick={endInning}
+                    className="w-full rounded-none font-bold uppercase tracking-wider"
+                    disabled={!isLobAnswerComplete || updateEntry.isPending}
+                    data-testid="btn-end-inning"
+                  >
+                    {updateEntry.isPending ? "Ending Inning..." : "End Inning"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4" data-testid="inning-summary">
+                  <div className="flex items-center gap-2 text-success">
+                    <PartyPopper className="w-5 h-5" />
+                    <span className="font-bold uppercase tracking-wider">Inning {inning.inningNumber} Complete</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">At-Bats</div>
+                      <div className="font-mono font-bold text-xl" data-testid="summary-total-at-bats">
+                        {inning.totalAtBats}
+                      </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Defensive Outs</div>
+                      <div className="font-mono font-bold text-xl">{inning.outs}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good</div>
+                      <div className="font-mono font-bold text-xl text-success">{inning.goodCount}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bad</div>
+                      <div className="font-mono font-bold text-xl text-destructive">{inning.badCount}</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Scored</div>
+                      <div className="font-mono font-bold text-xl" data-testid="summary-runs-scored">
+                        {inning.runsScored}
+                      </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-sm p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runners Left On Base</div>
+                      <div className="font-mono font-bold text-xl" data-testid="summary-players-left-on-base">
+                        {inning.playersLeftOnBase}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 flex items-center justify-between">
+                    <span className="uppercase tracking-wider text-xs text-muted-foreground font-semibold">Final Inning Delta</span>
+                    <span
+                      className={`font-mono font-bold text-2xl ${inning.inningDelta > 0 ? "text-success" : inning.inningDelta < 0 ? "text-destructive" : ""}`}
+                      data-testid="summary-inning-delta"
+                    >
+                      {inning.inningDelta > 0 ? "+" : ""}
+                      {inning.inningDelta}
+                    </span>
+                  </div>
+
                   <Button
                     type="button"
                     onClick={startNextInning}
@@ -313,8 +381,8 @@ export default function Track() {
                   >
                     Start Next Inning
                   </Button>
-                )}
-              </div>
+                </div>
+              )
             ) : (
               <>
                 <div className="space-y-4">

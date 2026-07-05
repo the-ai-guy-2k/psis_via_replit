@@ -1,0 +1,113 @@
+REPLIT ACI UPDATE — END INNING CONFIRMATION FLOW
+
+MISSION
+
+Update the PSIS Tracker so the inning does not auto-finalize immediately at 3 outs.
+
+When the inning reaches 3 outs, the app must show an end-inning confirmation step.
+
+==================================================
+REQUIRED FLOW
+==================================================
+
+User records at-bat outcomes until current inning reaches 3 outs.
+
+When outs = 3:
+
+1. Stop allowing additional at-bat entries for that inning.
+
+2. Display an end-of-inning panel.
+
+3. Ask:
+
+   Are there players left on base?
+
+4. Allow user to answer:
+
+   - No
+   - Yes
+
+5. If Yes, ask:
+
+   How many players were left on base?
+
+   Allowed values:
+
+   - 1
+   - 2
+   - 3
+
+6. Display button:
+
+   End Inning
+
+7. When user clicks End Inning:
+
+   - calculate final inning delta
+   - save inning summary
+   - display final inning result
+   - allow Start Next Inning
+
+==================================================
+DELTA CALCULATION
+==================================================
+
+Final inning delta should calculate only when End Inning is clicked.
+
+Use:
+
+goodCount - badCount - runsScored = finalInningDelta
+
+Store finalInningDelta on the inning summary.
+
+==================================================
+UI REQUIREMENTS
+==================================================
+
+After 3 outs, display:
+
+- Inning Number
+- Outs: 3 / 3
+- Good Outcomes
+- Bad Outcomes
+- Runs Scored
+- Are there players left on base?
+- End Inning button
+
+After End Inning is clicked, display:
+
+- Final Delta
+- Runners Left On Base
+- Inning Complete
+- Start Next Inning button
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. At-bat entry stops when outs reach 3.
+
+2. App asks "Are there players left on base?" only after 3 outs.
+
+3. User must click End Inning before final delta is calculated.
+
+4. Final delta includes runs scored.
+
+5. Runners left on base is stored in the inning summary.
+
+6. Start Next Inning appears after inning is ended.
+
+7. Existing tracker/dashboard does not crash.
+
+==================================================
+REPORT BACK
+
+Return:
+
+- Files changed
+- UI changes
+- Logic changes
+- Validation results
+- PASS / PARTIAL PASS / FAIL
