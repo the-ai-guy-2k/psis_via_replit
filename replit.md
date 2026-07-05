@@ -54,6 +54,7 @@ A web tool for baseball pitching coaches to log pitch sequences per plate appear
 - The Tracker page tracks a local `acknowledgedInning` state so clicking "Start Next Inning" previews the next inning's empty state (0/3 outs, delta 0) client-side without a server round trip — the real `inningNumber` assignment still happens server-side on the next submitted entry.
 - Inning fields (`inningNumber`, `outsAdded`) are optional on the `Entry` schema so pre-existing entries created before this feature remain valid.
 - `playersLeftOnBase` is set post-hoc via `PATCH /entries/{id}` once an inning is complete (see Architecture decisions above), not at at-bat creation time. `computeInningState` looks at the completing at-bat's `playersLeftOnBase` for the inning-level LOB stat.
+- **Recent Log scoping**: the Tracker's "Recent Log" sidebar list shows only the active inning's at-bats (`entry.inningNumber === inning.inningNumber`), not the full history — computed client-side in `track.tsx` (`recentLogEntries`), no API change. It stays populated through the End Inning confirmation step (Phase A) but clears the instant the End Inning PATCH succeeds (`inningEnded = showCompletedSummary && !pendingEndInning`), before "Start Next Inning" is even clicked — so it never shows stale/previous-inning at-bats. The separate "Last Entry" alert box above it is unaffected and still always shows the single most recent submission regardless of inning boundaries.
 
 ## User preferences
 

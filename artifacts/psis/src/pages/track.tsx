@@ -177,6 +177,12 @@ export default function Track() {
     if (inning) setAcknowledgedInning(inning.inningNumber);
   };
 
+  const inningEnded = showCompletedSummary && !pendingEndInning;
+  const recentLogEntries =
+    !inning || inningEnded || waitingForNextInning
+      ? []
+      : (entries ?? []).filter(entry => entry.inningNumber === inning.inningNumber);
+
   return (
     <div className="grid lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-6">
@@ -552,10 +558,12 @@ export default function Track() {
               Array(5)
                 .fill(0)
                 .map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-sm" />)
-            ) : entries?.length === 0 ? (
-              <div className="text-center text-sm text-muted-foreground py-8">No entries logged yet.</div>
+            ) : recentLogEntries.length === 0 ? (
+              <div className="text-center text-sm text-muted-foreground py-8" data-testid="recent-log-empty">
+                No at-bats logged for this inning yet.
+              </div>
             ) : (
-              entries?.slice(0, 8).map(entry => (
+              recentLogEntries.slice(0, 8).map(entry => (
                 <div
                   key={entry.id}
                   className="flex justify-between items-center bg-card border p-3 rounded-sm text-sm"

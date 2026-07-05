@@ -447,5 +447,58 @@
     "inningNumber": 7,
     "outsAdded": 1,
     "playersLeftOnBase": 2
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "ground_out",
+    "id": "68f119ad-e0e2-4498-989d-04d1e39893a2",
+    "createdAt": "2026-07-05T05:31:40.290Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "inningNumber": 8,
+    "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "ground_out",
+    "id": "288ba8de-6748-47f7-b15a-893f020db116",
+    "createdAt": "2026-07-05T05:31:50.047Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "inningNumber": 8,
+    "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "ground_out",
+    "id": "a7c327ed-592a-4a79-88ff-167297fbee84",
+    "createdAt": "2026-07-05T05:31:50.062Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "inningNumber": 8,
+    "outsAdded": 1,
+    "playersLeftOnBase": 0
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "ground_out",
+    "id": "0c5fab53-b68d-48f2-8dc2-232e5751e749",
+    "createdAt": "2026-07-05T05:32:08.291Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "inningNumber": 9,
+    "outsAdded": 1
   }
 ]
