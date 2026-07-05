@@ -15,9 +15,9 @@ import type { ResultOutcome } from './resultOutcome';
 export interface Entry {
   id: string;
   createdAt: string;
-  pitcherHandedness: Handedness;
-  batterHandedness: Handedness;
-  pitchSequence: string;
+  pitcherHandedness?: Handedness;
+  batterHandedness?: Handedness;
+  pitchSequence?: string;
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;

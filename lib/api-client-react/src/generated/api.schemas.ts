@@ -93,13 +93,13 @@ export const OutcomeDetail = {
 } as const;
 
 export interface CreateEntryInput {
-  pitcherHandedness: Handedness;
-  batterHandedness: Handedness;
+  pitcherHandedness?: Handedness;
+  batterHandedness?: Handedness;
   /**
      * The sequence of pitches thrown, e.g. "FB-SL-CH"
      * @minLength 1
      */
-  pitchSequence: string;
+  pitchSequence?: string;
   outcomeCategory: OutcomeCategory;
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;
@@ -114,9 +114,9 @@ export interface CreateEntryInput {
 export interface Entry {
   id: string;
   createdAt: string;
-  pitcherHandedness: Handedness;
-  batterHandedness: Handedness;
-  pitchSequence: string;
+  pitcherHandedness?: Handedness;
+  batterHandedness?: Handedness;
+  pitchSequence?: string;
   outcomeCategory?: OutcomeCategory;
   outcomeType?: OutcomeType;
   outcomeDetail?: OutcomeDetail;

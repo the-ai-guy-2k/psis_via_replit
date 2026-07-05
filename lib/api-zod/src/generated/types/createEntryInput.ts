@@ -11,13 +11,13 @@ import type { OutcomeDetail } from './outcomeDetail';
 import type { OutcomeType } from './outcomeType';
 
 export interface CreateEntryInput {
-  pitcherHandedness: Handedness;
-  batterHandedness: Handedness;
+  pitcherHandedness?: Handedness;
+  batterHandedness?: Handedness;
   /**
      * The sequence of pitches thrown, e.g. "FB-SL-CH"
      * @minLength 1
      */
-  pitchSequence: string;
+  pitchSequence?: string;
   outcomeCategory: OutcomeCategory;
   outcomeType: OutcomeType;
   outcomeDetail?: OutcomeDetail;

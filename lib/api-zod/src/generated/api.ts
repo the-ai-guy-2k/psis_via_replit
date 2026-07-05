@@ -23,9 +23,9 @@ export const HealthCheckResponse = zod.object({
 export const ListEntriesResponseItem = zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
   "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
@@ -50,9 +50,9 @@ export const createEntryBodyPlayersLeftOnBaseMin = 0;
 
 
 export const CreateEntryBody = zod.object({
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string().min(1).describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().min(1).optional().describe('The sequence of pitches thrown, e.g. \"FB-SL-CH\"'),
   "outcomeCategory": zod.enum(['defense', 'offense']).describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).describe('Specific outcome selected within a defense or offense branch'),
   "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
@@ -63,9 +63,9 @@ export const CreateEntryBody = zod.object({
 export const CreateEntryResponse = zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
   "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),
@@ -87,9 +87,9 @@ export const GetDashboardResponse = zod.object({
   "recentEntries": zod.array(zod.object({
   "id": zod.string(),
   "createdAt": zod.string(),
-  "pitcherHandedness": zod.enum(['L', 'R']),
-  "batterHandedness": zod.enum(['L', 'R']),
-  "pitchSequence": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
   "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
   "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch'),
   "outcomeDetail": zod.enum(['double', 'triple']).optional().describe('Follow-up detail, currently only used for extra_base_hit'),

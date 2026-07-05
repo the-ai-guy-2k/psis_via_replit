@@ -156,5 +156,16 @@
     "badCount": 1,
     "strikeoutCount": 0,
     "delta": -1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "e6e53b4e-6d5e-4565-b707-d14baa38eb08",
+    "createdAt": "2026-07-05T04:27:25.097Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1
   }
 ]

@@ -9,6 +9,9 @@ function computeSequenceStats(entries: Entry[]): SequenceStat[] {
   const bySequence = new Map<string, { totalDelta: number; occurrences: number }>();
 
   for (const entry of entries) {
+    if (!entry.pitchSequence) {
+      continue;
+    }
     const existing = bySequence.get(entry.pitchSequence) ?? {
       totalDelta: 0,
       occurrences: 0,

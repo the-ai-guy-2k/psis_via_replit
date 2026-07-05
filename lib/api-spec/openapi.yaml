@@ -162,9 +162,6 @@ components:
         notes:
           type: string
       required:
-        - pitcherHandedness
-        - batterHandedness
-        - pitchSequence
         - outcomeCategory
         - outcomeType
     Entry:
@@ -206,9 +203,6 @@ components:
       required:
         - id
         - createdAt
-        - pitcherHandedness
-        - batterHandedness
-        - pitchSequence
         - resultCategory
         - goodCount
         - badCount

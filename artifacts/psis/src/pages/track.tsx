@@ -6,7 +6,7 @@ import {
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
 } from "@workspace/api-client-react";
-import type { OutcomeCategory, OutcomeType, OutcomeDetail, Handedness } from "@workspace/api-client-react";
+import type { OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,6 @@ export default function Track() {
   const { data: entries, isLoading: entriesLoading } = useListEntries();
   const createEntry = useCreateEntry();
 
-  const [pitcherHandedness, setPitcherHandedness] = useState<Handedness | undefined>();
-  const [batterHandedness, setBatterHandedness] = useState<Handedness | undefined>();
-  const [pitchSequence, setPitchSequence] = useState("");
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
 
@@ -78,26 +75,21 @@ export default function Track() {
       wizard.hasPlayersLeftOnBase === false ||
       (wizard.hasPlayersLeftOnBase === true && wizard.playersLeftOnBase !== undefined && wizard.playersLeftOnBase >= 0));
 
-  const isFormComplete =
-    !!pitcherHandedness && !!batterHandedness && pitchSequence.trim().length > 0 && isWizardComplete;
+  const isFormComplete = isWizardComplete;
 
   const resetForm = () => {
-    setPitchSequence("");
     setNotes("");
     setWizard(emptyWizard);
   };
 
   const onSubmit = () => {
-    if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType || !pitcherHandedness || !batterHandedness) {
+    if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType) {
       return;
     }
 
     createEntry.mutate(
       {
         data: {
-          pitcherHandedness,
-          batterHandedness,
-          pitchSequence,
           outcomeCategory: wizard.outcomeCategory,
           outcomeType: wizard.outcomeType,
           outcomeDetail: wizard.outcomeDetail,
@@ -106,10 +98,10 @@ export default function Track() {
         },
       },
       {
-        onSuccess: newEntry => {
+        onSuccess: () => {
           toast({
             title: "Entry Logged",
-            description: `Sequence ${newEntry.pitchSequence} recorded successfully.`,
+            description: "At-bat outcome recorded successfully.",
           });
           resetForm();
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
@@ -133,50 +125,10 @@ export default function Track() {
       <div className="lg:col-span-2 space-y-6">
         <Card className="rounded-none border-t-4 border-t-primary">
           <CardHeader className="bg-muted/50 pb-4">
-            <CardTitle className="uppercase tracking-wider">Log Plate Appearance</CardTitle>
-            <CardDescription>Record pitch sequencing and immediate outcome.</CardDescription>
+            <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
+            <CardDescription>Fast outcome entry — no pitcher, batter, or pitch sequence details required.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Pitcher</Label>
-                <Select onValueChange={v => setPitcherHandedness(v as Handedness)} value={pitcherHandedness}>
-                  <SelectTrigger data-testid="select-pitcher" className="rounded-sm">
-                    <SelectValue placeholder="Handedness" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="R">Right (R)</SelectItem>
-                    <SelectItem value="L">Left (L)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Batter</Label>
-                <Select onValueChange={v => setBatterHandedness(v as Handedness)} value={batterHandedness}>
-                  <SelectTrigger data-testid="select-batter" className="rounded-sm">
-                    <SelectValue placeholder="Handedness" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="R">Right (R)</SelectItem>
-                    <SelectItem value="L">Left (L)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Sequence (e.g. FB-SL-CH)</Label>
-              <Input
-                placeholder="FB-SL-CH"
-                className="font-mono uppercase rounded-sm"
-                value={pitchSequence}
-                onChange={e => setPitchSequence(e.target.value)}
-                data-testid="input-sequence"
-              />
-            </div>
-
-            <Separator />
-
             <div className="space-y-4">
               <Label className="uppercase tracking-wider text-xs text-muted-foreground">Step 1 — Outcome Category</Label>
               <div className="grid grid-cols-2 gap-4">
@@ -339,7 +291,9 @@ export default function Track() {
             ) : (
               <AlertCircle className="w-4 h-4 text-destructive" />
             )}
-            <AlertTitle className="uppercase tracking-wider font-bold">Last Entry: {recentEntry.pitchSequence}</AlertTitle>
+            <AlertTitle className="uppercase tracking-wider font-bold">
+              Last Entry{recentEntry.pitchSequence ? `: ${recentEntry.pitchSequence}` : ""}
+            </AlertTitle>
             <AlertDescription className="font-mono text-sm mt-2">
               <div className="flex flex-wrap gap-4">
                 <span className="capitalize">{describeOutcome(recentEntry)}</span>
@@ -375,12 +329,18 @@ export default function Track() {
                   data-testid={`log-entry-${entry.id}`}
                 >
                   <div>
-                    <div className="font-mono font-bold uppercase">{entry.pitchSequence}</div>
+                    <div className="font-mono font-bold uppercase">
+                      {entry.pitchSequence || describeOutcome(entry)}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                      <span className="font-semibold">
-                        {entry.pitcherHandedness}v{entry.batterHandedness}
-                      </span>
-                      <span>•</span>
+                      {entry.pitcherHandedness && entry.batterHandedness && (
+                        <>
+                          <span className="font-semibold">
+                            {entry.pitcherHandedness}v{entry.batterHandedness}
+                          </span>
+                          <span>•</span>
+                        </>
+                      )}
                       <span className="capitalize">{describeOutcome(entry)}</span>
                     </div>
                   </div>

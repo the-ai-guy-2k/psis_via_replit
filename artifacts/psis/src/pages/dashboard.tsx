@@ -180,10 +180,12 @@ export default function Dashboard() {
                       {format(new Date(entry.createdAt), "HH:mm")}
                     </TableCell>
                     <TableCell className="font-mono font-bold">
-                      {entry.pitcherHandedness}v{entry.batterHandedness}
+                      {entry.pitcherHandedness && entry.batterHandedness
+                        ? `${entry.pitcherHandedness}v${entry.batterHandedness}`
+                        : "—"}
                     </TableCell>
                     <TableCell className="font-mono font-bold uppercase">
-                      {entry.pitchSequence}
+                      {entry.pitchSequence || "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
