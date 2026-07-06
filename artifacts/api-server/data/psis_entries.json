@@ -971,5 +971,25 @@
     "gameId": 2,
     "outsAdded": 1,
     "playersLeftOnBase": 0
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "da291f4c-75a8-430a-b3b4-9b578eee68ef",
+    "createdAt": "2026-07-06T01:14:45.775Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 2,
+    "gameId": 2,
+    "outsAdded": 1
   }
 ]

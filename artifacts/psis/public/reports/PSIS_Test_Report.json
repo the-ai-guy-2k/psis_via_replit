@@ -1,0 +1,592 @@
+{
+  "generatedAt": "2026-07-06T01:12:10.508Z",
+  "overallStatus": "PASS",
+  "summary": {
+    "totalScenarios": 10,
+    "passed": 10,
+    "failed": 0,
+    "totalAssertions": 61,
+    "passedAssertions": 61,
+    "failedAssertions": 0
+  },
+  "scenarios": [
+    {
+      "id": "outs-per-outcome",
+      "name": "Outs Calculation Per Outcome Type",
+      "category": "Outs",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "strikeout -> 1 out",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "fly_out -> 1 out",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "ground_out/single_play -> 1 out",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "ground_out/double_play -> 2 outs",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "ground_out/triple_play -> 3 outs",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "description": "offense hit -> 0 outs",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "offense walk -> 0 outs",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "outs-capped-at-3",
+      "name": "Outs Are Capped At 3 Per Inning (Completed Innings)",
+      "category": "Outs",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "3rd at-bat only adds 1 out (capped, not 3)",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "inning total outs is exactly 3",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "description": "inning is marked completed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "computeLatestInningState still shows the just-completed inning (display, no auto-advance)",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "next at-bat auto-advances to inning 2 with 0 outs",
+          "expected": {
+            "inningNumber": 2,
+            "currentOuts": 0
+          },
+          "actual": {
+            "inningNumber": 2,
+            "currentOuts": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "runs-scored-hits",
+      "name": "Runs Scored: Hit Advancement",
+      "category": "Runs",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "single with empty bases scores 0 runs",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "batter is on first after the single",
+          "expected": {
+            "firstBase": true,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "actual": {
+            "firstBase": true,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "pass": true
+        },
+        {
+          "description": "double advances the existing runner from 1st to 3rd (no run yet)",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "batter ends on 2nd, prior runner on 3rd",
+          "expected": {
+            "firstBase": false,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "actual": {
+            "firstBase": false,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "pass": true
+        },
+        {
+          "description": "home run with runners on 2nd/3rd scores all 3 (2 runners + batter)",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "description": "bases are empty after the home run",
+          "expected": {
+            "firstBase": false,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "actual": {
+            "firstBase": false,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "runs-scored-walks",
+      "name": "Runs Scored: Forced-Advancement Walks",
+      "category": "Runs",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "walk with empty bases forces no runners, no run",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "batter takes first",
+          "expected": {
+            "firstBase": true,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "actual": {
+            "firstBase": true,
+            "secondBase": false,
+            "thirdBase": false
+          },
+          "pass": true
+        },
+        {
+          "description": "2nd walk with runner on 1st forces them to 2nd, no run",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "runners now on 1st and 2nd",
+          "expected": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": false
+          },
+          "actual": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": false
+          },
+          "pass": true
+        },
+        {
+          "description": "3rd walk loads the bases, no run yet",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "bases loaded",
+          "expected": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "actual": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "pass": true
+        },
+        {
+          "description": "4th walk with bases loaded forces a run home",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "bases remain loaded after forcing 1 run in",
+          "expected": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "actual": {
+            "firstBase": true,
+            "secondBase": true,
+            "thirdBase": true
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "lob-on-inning-complete",
+      "name": "Players Left On Base At Inning Completion",
+      "category": "LOB",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "playersLeftOnBase is undefined mid-inning (not the 3rd out)",
+          "pass": true
+        },
+        {
+          "description": "playersLeftOnBase computed on the at-bat that records the 3rd out",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "inning-level LOB matches the completing at-bat's LOB",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "good-bad-eabr-classification",
+      "name": "Good/Bad EABR Classification",
+      "category": "Good/Bad EABR",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "defense outcomes are classified good",
+          "expected": "good",
+          "actual": "good",
+          "pass": true
+        },
+        {
+          "description": "offense outcomes are classified bad",
+          "expected": "bad",
+          "actual": "bad",
+          "pass": true
+        },
+        {
+          "description": "strikeout entry is resultCategory good",
+          "expected": "good",
+          "actual": "good",
+          "pass": true
+        },
+        {
+          "description": "strikeout entry sets strikeoutCount = 1",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "strikeout entry goodCount/badCount are 1/0",
+          "expected": {
+            "goodCount": 1,
+            "badCount": 0
+          },
+          "actual": {
+            "goodCount": 1,
+            "badCount": 0
+          },
+          "pass": true
+        },
+        {
+          "description": "walk entry is resultCategory bad",
+          "expected": "bad",
+          "actual": "bad",
+          "pass": true
+        },
+        {
+          "description": "walk entry does not set strikeoutCount",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "walk entry goodCount/badCount are 0/1",
+          "expected": {
+            "goodCount": 0,
+            "badCount": 1
+          },
+          "actual": {
+            "goodCount": 0,
+            "badCount": 1
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "good-total-fraction",
+      "name": "Good-Count / Total-At-Bats Fraction",
+      "category": "Fraction",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "total at-bats is 4",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "description": "good count is 3 (3 defense outcomes)",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "description": "bad count is 1 (1 offense outcome)",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "fraction (goodCount/totalAtBats) is 3/4",
+          "expected": 0.75,
+          "actual": 0.75,
+          "pass": true
+        },
+        {
+          "description": "inning completed after the 4th at-bat's 3rd out",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "the walk's runner is still on 1st at the 3rd out (defensive outs never advance/clear runners)",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "inning-delta-formula",
+      "name": "Inning Delta = Good - Bad - RunsScored",
+      "category": "Inning Delta",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "2nd at-bat's single scores the runner on 3rd",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "per-entry delta = good - bad - runs (0 - 1 - 1 = -2)",
+          "expected": -2,
+          "actual": -2,
+          "pass": true
+        },
+        {
+          "description": "per-entry delta for a good outcome with no runs is +1",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "computeInningState's inningDelta equals sum(entry.delta) over the inning",
+          "expected": -2,
+          "actual": -2,
+          "pass": true
+        },
+        {
+          "description": "inningDelta reflects both bad hits and the good strikeout (-1 + -2 + 1 = -2 total)",
+          "expected": -2,
+          "actual": -2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "completed-innings-auto-advance",
+      "name": "Completed Innings Auto-Advance To The Next Inning",
+      "category": "Completed Innings",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "inning 1 completed with 3 outs",
+          "expected": {
+            "outs": 3,
+            "completed": true
+          },
+          "actual": {
+            "outs": 3,
+            "completed": true
+          },
+          "pass": true
+        },
+        {
+          "description": "first at-bat after inning 1 completes is assigned inningNumber 2",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "latest inning state reflects inning 2, in progress",
+          "expected": {
+            "inningNumber": 2,
+            "outs": 1,
+            "completed": false
+          },
+          "actual": {
+            "inningNumber": 2,
+            "outs": 1,
+            "completed": false
+          },
+          "pass": true
+        },
+        {
+          "description": "inning 2 completed with 3 outs",
+          "expected": {
+            "outs": 3,
+            "completed": true
+          },
+          "actual": {
+            "outs": 3,
+            "completed": true
+          },
+          "pass": true
+        },
+        {
+          "description": "inning 1 state is unaffected by inning 2 completing",
+          "expected": {
+            "outs": 3,
+            "completed": true
+          },
+          "actual": {
+            "outs": 3,
+            "completed": true
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "reset-game-state-gameid-boundary",
+      "name": "New Game Reset Scopes The Live View By gameId",
+      "category": "Reset Game State",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "game 1's live view shows inning 2 in progress before reset",
+          "expected": {
+            "inningNumber": 2,
+            "outs": 0,
+            "completed": false
+          },
+          "actual": {
+            "inningNumber": 2,
+            "outs": 0,
+            "completed": false
+          },
+          "pass": true
+        },
+        {
+          "description": "historical entries are untouched by the gameId boundary bump (no deletion)",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "description": "new game's live view resets to inning 1, 0 outs, no completed innings",
+          "expected": {
+            "inningNumber": 1,
+            "outs": 0,
+            "completed": false,
+            "totalAtBats": 0
+          },
+          "actual": {
+            "inningNumber": 1,
+            "outs": 0,
+            "completed": false,
+            "totalAtBats": 0
+          },
+          "pass": true
+        },
+        {
+          "description": "a new at-bat in the new game starts at inning 1 with empty bases",
+          "expected": {
+            "inningNumber": 1,
+            "currentOuts": 0,
+            "baseState": {
+              "firstBase": false,
+              "secondBase": false,
+              "thirdBase": false
+            }
+          },
+          "actual": {
+            "inningNumber": 1,
+            "currentOuts": 0,
+            "baseState": {
+              "firstBase": false,
+              "secondBase": false,
+              "thirdBase": false
+            }
+          },
+          "pass": true
+        },
+        {
+          "description": "old game's entries are still scoped to gameId 1",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "old game's entries are NOT scoped to the new gameId",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "description": "an entry with no gameId is treated as belonging to game 1 (backward compatibility)",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "an entry with no gameId is NOT treated as belonging to a later game",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

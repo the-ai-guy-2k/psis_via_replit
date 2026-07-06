@@ -1,0 +1,453 @@
+PSIS ACI — SCENARIO TEST SCRIPT + DOWNLOADABLE TEST REPORT ARTIFACT
+
+MISSION
+
+Create and run a scenario-based PSIS accuracy test script, then generate downloadable test report files from inside the Replit UI.
+
+The goal is to validate whether PSIS correctly calculates:
+
+- outs
+- runs scored
+- bases / LOB
+- good EABR count
+- bad EABR count
+- EABR fraction
+- inning delta
+- completed inning summaries
+- reset game state
+
+==================================================
+TEST TYPE
+==================================================
+
+Use Option 2:
+
+Scenario Tests
+
+The script should feed complete inning scenarios into the same logic used by the Tracker and verify expected results.
+
+This is not a UI click test.
+
+This is a baseball logic truth test.
+
+==================================================
+CREATE TEST SCRIPT
+==================================================
+
+Create a test script named:
+
+scripts/test-psis-scenarios.js
+
+or if TypeScript is required:
+
+scripts/test-psis-scenarios.ts
+
+Add an npm script:
+
+"test:psis": "node scripts/test-psis-scenarios.js"
+
+or equivalent if using TypeScript.
+
+==================================================
+IMPORTANT REQUIREMENT
+==================================================
+
+Do not duplicate PSIS logic inside the test script.
+
+The test script must import and use the actual PSIS logic functions used by the Tracker.
+
+If the logic is currently embedded inside React components, extract it into a shared logic file first.
+
+Preferred shared file:
+
+client/src/lib/psisGameLogic.ts
+
+or equivalent existing structure.
+
+==================================================
+FUNCTIONS TO TEST
+==================================================
+
+The test script should validate:
+
+- applying an EABR result
+- updating outs
+- updating bases
+- calculating runs scored
+- calculating LOB
+- calculating good/bad EABR classification
+- calculating EABR fraction
+- calculating inning delta
+- completing an inning
+- resetting game state
+
+==================================================
+CORE TRUTH RULES
+==================================================
+
+EABR fraction:
+
+goodEabr / totalEabr
+
+Example:
+
+goodCount = 3
+totalAtBats = 6
+
+EABR fraction = 3/6
+
+--------------------------------------------------
+
+Inning delta:
+
+goodCount - badCount - runsScored
+
+Example:
+
+goodCount = 4
+badCount = 2
+runsScored = 1
+
+Final delta = +1
+
+--------------------------------------------------
+
+LOB:
+
+Number of occupied bases at inning end.
+
+Example:
+
+1B occupied, 2B empty, 3B occupied
+
+LOB = 2
+
+==================================================
+SCENARIO TEST CASES REQUIRED
+==================================================
+
+Test 1 — Clean Defensive Inning
+
+Events:
+
+- Strikeout
+- Fly Out
+- Ground Out → Single Play
+
+Expected:
+
+outs = 3
+runsScored = 0
+LOB = 0
+goodCount = 3
+badCount = 0
+totalEabr = 3
+EABR fraction = 3/3
+finalDelta = +3
+
+--------------------------------------------------
+
+Test 2 — Walk Then Double Play
+
+Events:
+
+- Walk
+- Ground Out → Double Play
+- Strikeout
+
+Expected:
+
+outs = 3
+runsScored = 0
+LOB = 0 or based on implemented base logic
+goodCount = 2
+badCount = 1
+totalEabr = 3
+EABR fraction = 2/3
+finalDelta = +1
+
+--------------------------------------------------
+
+Test 3 — Bases Loaded Walk Scores One Run
+
+Events:
+
+- Hit → Single
+- Hit → Single
+- Hit → Single
+- Walk
+- Strikeout
+- Strikeout
+- Strikeout
+
+Expected:
+
+outs = 3
+runsScored = 1
+LOB = 3
+goodCount = 3
+badCount = 4
+totalEabr = 7
+EABR fraction = 3/7
+finalDelta = -2
+
+Calculation:
+
+3 - 4 - 1 = -2
+
+--------------------------------------------------
+
+Test 4 — Home Run With Two Runners On
+
+Events:
+
+- Hit → Single
+- Walk
+- Hit → Home Run
+- Strikeout
+- Fly Out
+- Ground Out → Single Play
+
+Expected:
+
+outs = 3
+runsScored = 3
+LOB = 0
+goodCount = 3
+badCount = 3
+totalEabr = 6
+EABR fraction = 3/6
+finalDelta = -3
+
+Calculation:
+
+3 - 3 - 3 = -3
+
+--------------------------------------------------
+
+Test 5 — Double Play Ends Inning
+
+Events:
+
+- Hit → Single
+- Strikeout
+- Ground Out → Double Play
+
+Expected:
+
+outs = 3
+runsScored = 0
+LOB = 0
+goodCount = 2
+badCount = 1
+totalEabr = 3
+EABR fraction = 2/3
+finalDelta = +1
+
+--------------------------------------------------
+
+Test 6 — Triple Play Ends Inning
+
+Events:
+
+- Hit → Single
+- Hit → Single
+- Ground Out → Triple Play
+
+Expected:
+
+outs = 3
+runsScored = 0
+LOB = 0
+goodCount = 1
+badCount = 2
+totalEabr = 3
+EABR fraction = 1/3
+finalDelta = -1
+
+--------------------------------------------------
+
+Test 7 — Reset Game State
+
+Start with completed inning data.
+
+Run reset game function.
+
+Expected:
+
+currentInning = 1
+outs = 0
+runsScored = 0
+goodCount = 0
+badCount = 0
+currentDelta = 0
+bases empty
+recentLog empty
+completed innings empty
+wizard reset to Outcome
+
+==================================================
+DOWNLOADABLE TEST REPORT REQUIREMENT
+==================================================
+
+After running the tests, Replit must generate downloadable test report files from the app UI.
+
+The report files should be created in a location accessible for download from the Replit app.
+
+Preferred report folder:
+
+public/reports/
+
+Generate these files:
+
+1. PSIS_Test_Report.md
+2. PSIS_Test_Report.json
+
+Optional but preferred:
+
+3. PSIS_Test_Report.zip
+
+==================================================
+UI DOWNLOAD REQUIREMENT
+==================================================
+
+Add a simple download area in the PSIS UI.
+
+Preferred location:
+
+Dashboard page or Tracker page bottom section.
+
+Label:
+
+Validation Reports
+
+Provide download links/buttons for:
+
+- Download Markdown Report
+- Download JSON Report
+- Download ZIP Report if created
+
+Example:
+
+Validation Reports
+
+[Download PSIS_Test_Report.md]
+[Download PSIS_Test_Report.json]
+[Download PSIS_Test_Report.zip]
+
+The download links should point to the generated files in public/reports/.
+
+==================================================
+REPORT CONTENT REQUIREMENTS
+==================================================
+
+The Markdown report must include:
+
+- report title
+- timestamp
+- test command used
+- overall result: PASS / PARTIAL PASS / FAIL
+- scenario-by-scenario results
+- expected values
+- actual values
+- mismatch fields
+- recommendation section
+
+The JSON report must include structured data:
+
+{
+  "project": "PSIS",
+  "reportType": "Scenario Test Report",
+  "timestamp": "...",
+  "overallResult": "PASS | PARTIAL PASS | FAIL",
+  "scenarios": [
+    {
+      "name": "...",
+      "status": "PASS | FAIL",
+      "expected": {},
+      "actual": {},
+      "mismatches": []
+    }
+  ]
+}
+
+==================================================
+OUTPUT FORMAT IN TERMINAL
+==================================================
+
+The test script should also print a clear terminal report:
+
+PSIS Scenario Test Report
+
+PASS / FAIL per scenario
+
+For failed scenarios, show:
+
+- scenario name
+- expected values
+- actual values
+- mismatch field
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. npm run test:psis exists.
+
+2. Scenario test script runs successfully.
+
+3. Script imports actual PSIS game logic, not copied logic.
+
+4. All required scenarios are included.
+
+5. EABR fraction is validated.
+
+6. Final inning delta is validated.
+
+7. LOB is validated.
+
+8. Runs scored is validated.
+
+9. Reset game state is validated.
+
+10. Markdown report file is generated.
+
+11. JSON report file is generated.
+
+12. Reports are available for download through the PSIS/Replit UI.
+
+13. Report clearly shows PASS / FAIL per scenario.
+
+14. Failed scenarios include expected vs actual values.
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- authentication
+- cloud storage
+- advanced analytics
+- AI explanations
+- full UI automation testing
+- external test services
+
+This ACI is only for scenario logic validation and downloadable report artifacts.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files created
+- Files modified
+- Test command used
+- Scenario results
+- Download links added
+- Any failed logic
+- Recommended fixes
+- Overall result: PASS / PARTIAL PASS / FAIL

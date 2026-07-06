@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "test:psis": "tsx ./src/test-psis-scenarios.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/api-zod": "workspace:*",
+    "@workspace/psis-game-logic": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -172,6 +172,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/psis-game-logic':
+        specifier: workspace:*
+        version: link:../../lib/psis-game-logic
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -634,7 +637,20 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/psis-game-logic:
+    dependencies:
+      '@workspace/api-zod':
+        specifier: workspace:*
+        version: link:../api-zod
+
   scripts:
+    dependencies:
+      '@workspace/api-zod':
+        specifier: workspace:*
+        version: link:../lib/api-zod
+      '@workspace/psis-game-logic':
+        specifier: workspace:*
+        version: link:../lib/psis-game-logic
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

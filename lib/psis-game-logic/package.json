@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/psis-game-logic",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/api-zod": "workspace:*"
+  }
+}

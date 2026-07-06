@@ -18,15 +18,26 @@ A web tool for baseball pitching coaches to log pitch sequences per plate appear
 - Storage: flat JSON file (`artifacts/api-server/data/psis_entries.json`) — no Postgres/Drizzle used
 - Validation: Zod (`zod/v4`)
 - API codegen: Orval (from OpenAPI spec) — generates typed React Query hooks
+- Testing: standalone scenario-based logic tests (`pnpm run test:psis`), see "Scenario testing" below
+
+## Scenario testing (`pnpm run test:psis`)
+
+- `lib/psis-game-logic` is a new composite lib package holding every pure PSIS rule (outs, base-state/run advancement, inning aggregation, gameId scoping) that used to live only inside `artifacts/api-server/src/lib/psisStore.ts`. `psisStore.ts` now re-exports these from the lib and keeps only file I/O (`getCurrentGameId`/`startNewGame`/`listEntries`/`appendEntry`). This split exists so both the live server and a standalone test script can import the exact same, unduplicated logic.
+- `scripts/src/test-psis-scenarios.ts` (run via `pnpm run test:psis` at the repo root, or `pnpm --filter @workspace/scripts run test:psis`) imports `@workspace/psis-game-logic` directly and runs 10 scenario tests (outs incl. capping at 3, hit run-advancement, forced-advancement walks, players-left-on-base, good/bad EABR classification, good/total fraction, inning delta = good − bad − runs, completed-innings auto-advance, and New Game gameId-boundary reset). It builds synthetic in-memory `Entry` objects (no file I/O, no server needed) via a small `simulateAtBat` helper that mirrors only the trivial request-glue in `entries.ts` (assembling goodCount/badCount/delta) — every actual rule decision is delegated to the imported lib functions.
+- Running the script regenerates `artifacts/psis/public/reports/PSIS_Test_Report.md` and `.json` (overwritten each run, PASS/PARTIAL/FAIL + per-assertion detail). Since they live under the Vite app's `public/` dir, they're servable at `${BASE_URL}reports/PSIS_Test_Report.{md,json}` with no server route needed.
+- The Dashboard page has a "Validation Reports" card (bottom) with download buttons for both report files, reading from `import.meta.env.BASE_URL`.
+- Re-run `pnpm run test:psis` after changing any game-logic rule in `lib/psis-game-logic` to regenerate the reports before considering the change done.
 
 ## Where things live
 
 - `lib/api-spec/openapi.yaml` — source-of-truth API contract (entries, dashboard, schemas)
-- `artifacts/api-server/src/lib/psisStore.ts` — JSON file read/write/append helpers
+- `artifacts/api-server/src/lib/psisStore.ts` — JSON file read/write/append helpers (game-logic itself now lives in `lib/psis-game-logic`, re-exported here)
+- `lib/psis-game-logic/src/index.ts` — the single source of truth for all pure PSIS game-logic rules, imported by both the API server and the scenario test script
+- `scripts/src/test-psis-scenarios.ts` — scenario-based logic tests (`pnpm run test:psis`), generates `artifacts/psis/public/reports/PSIS_Test_Report.{md,json}`
 - `artifacts/api-server/src/routes/entries.ts` — GET/POST `/entries`
 - `artifacts/api-server/src/routes/dashboard.ts` — GET `/dashboard` (aggregates, best/worst sequences)
 - `artifacts/api-server/data/psis_entries.json` — the actual data store (seeded with 5 example entries)
-- `artifacts/psis/src/pages/` — home, track (data-entry form), dashboard
+- `artifacts/psis/src/pages/` — home, track (data-entry form), dashboard (also hosts the "Validation Reports" download section)
 
 ## Architecture decisions
 

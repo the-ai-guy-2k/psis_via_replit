@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { Target, CheckCircle2, XCircle, ActivitySquare } from "lucide-react";
+import { Target, CheckCircle2, XCircle, ActivitySquare, FileDown, FileJson, FileText } from "lucide-react";
 import { describeOutcome } from "@/lib/outcome";
 
 export default function Dashboard() {
@@ -208,6 +209,32 @@ export default function Dashboard() {
               )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-none">
+        <CardHeader className="bg-muted/30 pb-4 border-b">
+          <CardTitle className="uppercase tracking-wider text-sm flex items-center gap-2">
+            <FileDown className="w-4 h-4" />
+            Validation Reports
+          </CardTitle>
+          <CardDescription>
+            Scenario-based logic tests for PSIS's game rules (outs, runs, LOB, good/bad EABR, fraction, inning delta, completed innings, reset-game-state), run against the actual game-logic module.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 flex flex-wrap gap-3">
+          <Button variant="outline" className="rounded-sm" asChild>
+            <a href={`${import.meta.env.BASE_URL}reports/PSIS_Test_Report.md`} download>
+              <FileText className="w-4 h-4 mr-2" />
+              Download Test Report (.md)
+            </a>
+          </Button>
+          <Button variant="outline" className="rounded-sm" asChild>
+            <a href={`${import.meta.env.BASE_URL}reports/PSIS_Test_Report.json`} download>
+              <FileJson className="w-4 h-4 mr-2" />
+              Download Test Report (.json)
+            </a>
+          </Button>
         </CardContent>
       </Card>
     </div>
