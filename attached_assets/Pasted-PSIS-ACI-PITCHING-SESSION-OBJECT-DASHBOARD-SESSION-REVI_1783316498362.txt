@@ -1,0 +1,185 @@
+PSIS ACI — PITCHING SESSION OBJECT + DASHBOARD SESSION REVIEW
+
+MISSION
+
+Update PSIS so completed pitching sessions are saved as reviewable session objects and can be accessed from the Dashboard.
+
+This ACI builds on the previous End Session feature.
+
+==================================================
+CURRENT TRUTH
+==================================================
+
+PSIS can track inning outcomes and calculate EABR logic.
+
+Live testing showed the user needs to save an entire pitching session and later review that session as a complete object.
+
+The Dashboard currently contains items that are not useful for the current PSIS v1 workflow.
+
+==================================================
+PATCH 1 — SAVE SESSION AS OBJECT
+==================================================
+
+When the user ends a pitching session, save the session as a complete object.
+
+The session object should be reviewable later.
+
+Each session object should include:
+
+- sessionId
+- date/time
+- innings completed
+- total outs recorded
+- session EABR Delta
+- session EABR Fraction
+- total good EABR units
+- total bad EABR units
+- total hits allowed
+- total walks allowed
+- total home runs allowed
+- total extra base hits allowed
+- total RBI allowed
+- total runs allowed
+- total strikeouts
+- total fly outs
+- total ground outs
+- total LOB
+- inning summaries
+- EABR records / at-bat entries
+
+==================================================
+PATCH 2 — REMOVE DASHBOARD ITEMS
+==================================================
+
+Remove the following from the Dashboard:
+
+- Top Sequences
+- Worst Sequence
+- Recent Entries
+
+These do not fit the current PSIS v1 session-review workflow.
+
+Do not delete underlying data unless required.
+
+This is a Dashboard presentation change.
+
+==================================================
+PATCH 3 — ADD PITCHING SESSIONS SECTION
+==================================================
+
+Add a Dashboard section for saved pitching sessions.
+
+Label:
+
+Pitching Sessions
+
+This section should show a button, card, or list item for each saved pitching session.
+
+Each session item should display summary info such as:
+
+- date/time
+- innings completed
+- session delta
+- session fraction
+
+Example:
+
+Pitching Session — 2026-07-06
+Innings: 7
+Delta: +4
+Fraction: 18/14
+
+==================================================
+PATCH 4 — SESSION DETAIL VIEW
+==================================================
+
+When the user clicks a pitching session item, display that session’s properties / entries.
+
+The detail view should include:
+
+- session summary
+- inning-by-inning results
+- EABR records / at-bat entries
+- totals
+
+Preferred behavior:
+
+- Can be a modal, expandable panel, or separate route.
+- Keep it simple.
+- Do not overbuild.
+
+==================================================
+DASHBOARD FLOW
+==================================================
+
+Dashboard
+
+↓
+
+Pitching Sessions
+
+↓
+
+Click Session
+
+↓
+
+Display Session Properties / Entries
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Pitching Training Tool
+- Stat Head version
+- AI recommendations
+- advanced charts
+- player database
+- cloud database
+- authentication
+
+This ACI only adds saved session review capability.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Ended pitching sessions are saved as session objects.
+
+2. Dashboard no longer shows:
+   - Top Sequences
+   - Worst Sequence
+   - Recent Entries
+
+3. Dashboard shows Pitching Sessions section.
+
+4. Each saved session is visible as a clickable item.
+
+5. Clicking a session displays session properties and entries.
+
+6. Session object includes inning summaries.
+
+7. Session object includes EABR records / at-bat entries.
+
+8. Session totals are visible.
+
+9. Existing Tracker workflow still works.
+
+10. Existing EABR calculations are not changed.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- Session object structure
+- Dashboard changes
+- Session review UI
+- Validation results
+- PASS / PARTIAL PASS / FAIL
