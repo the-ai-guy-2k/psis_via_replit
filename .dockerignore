@@ -1,0 +1,10 @@
+.git
+node_modules
+**/node_modules
+.agents
+attached_assets
+*.log
+.env
+.env.*
+.DS_Store
+coverage
