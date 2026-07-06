@@ -10,6 +10,7 @@
     "test:psis": "pnpm --filter @workspace/scripts run test:psis"
   },
   "private": true,
+  "packageManager": "pnpm@10.34.4",
   "devDependencies": {
     "prettier": "^3.8.4",
     "typescript": "~5.9.3"
