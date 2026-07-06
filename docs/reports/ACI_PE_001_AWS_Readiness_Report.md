@@ -1,9 +1,10 @@
 # ACI-PE-001 — PSIS AWS Readiness Report
 
-**Generated:** 2026-07-06 (local assessment)  
+**Generated:** 2026-07-06  
+**Last updated:** 2026-07-06 (ACI-PE-001R recheck)  
 **Repository:** https://github.com/the-ai-guy-2k/psis_via_replit.git  
 **PA image:** `taig2k/pitching_sequence_intellegence_system_psis:latest`  
-**Assessment method:** Public CI evidence, AWS documentation review, local environment probe (no credentials), read-only readiness workflow added for GitHub Actions validation
+**Readiness workflow run:** https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28825726947
 
 ---
 
@@ -11,186 +12,174 @@
 
 | Area | Status |
 |------|--------|
-| Docker Hub secrets | **Present** (inferred from successful PA publish) |
-| AWS GitHub secrets | **Unknown / likely missing** (not listable without `gh` auth locally) |
-| AWS identity | **Not verified** (no local or CI AWS run at time of report) |
-| App Runner for new PSIS PE | **Not viable** (AWS closed to new customers, Jul 2026) |
-| Recommended PE path | **ECS Express Mode + ECR mirror from Docker Hub** |
-| **Final status** | **PARTIAL PASS** |
+| Credential file discovered | **Yes** — `nebula_accessKeys.csv` |
+| GitHub AWS secrets configured | **Yes** |
+| AWS identity verified | **Yes** |
+| Region | **`us-east-1`** |
+| ECR / CloudWatch / ECS read probes | **PASS** |
+| App Runner for new PSIS PE | **Not viable** (AWS policy + list-services FAIL) |
+| Recommended PE path | **ECS Express Mode + ECR mirror** |
+| **Final status** | **PASS** |
 
 ---
 
-## 1. GitHub Secrets Status
+## ACI-PE-001R — Secret Recovery
 
-Checked via: local `gh secret list` (unavailable — CLI not authenticated), workflow secret-presence probe (added), PA CI indirect validation for Docker Hub.
+### Task 1 — Local credential folder
 
-| Secret | Status | Evidence |
-|--------|--------|----------|
-| `DOCKERHUB_USERNAME` | **present** | PA workflow run [#7](https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28822983314) completed **success** including Docker Hub publish + pull smoke test (`fa29986`) |
-| `DOCKERHUB_TOKEN` | **present** | Same as above — `docker/login-action` and `docker push` succeeded |
-| `AWS_ACCESS_KEY_ID` | **missing** (probable) | No AWS usage in any workflow; local `aws sts get-caller-identity` → `NoCredentials`; `gh` not authenticated to list secrets |
-| `AWS_SECRET_ACCESS_KEY` | **missing** (probable) | Same as above |
-| `AWS_REGION` | **missing** (probable) | Not referenced in repository workflows |
+**Path:** `C:\Users\tim\Desktop\stuff`
 
-**Note:** Secret values were not printed. Re-run validation via **Actions → PSIS PE AWS Readiness → Run workflow** after AWS secrets are configured for authoritative present/missing output.
+| File | Role |
+|------|------|
+| `nebula_accessKeys.csv` | **AWS credentials** (identified) |
+| `stuff.txt` | Contains AKIA pattern; duplicate/secondary — not used |
+| `openai_key_for_financial_app.txt` | OpenAI key — not AWS |
+
+**Likely credential file:** `nebula_accessKeys.csv`  
+**Required values found:** **Yes** — Access key ID and Secret access key columns populated; region not in file → defaulted to `us-east-1`.
+
+Secret values were **not** printed, committed, or copied into the repository.
+
+### Task 2–3 — GitHub secrets
+
+Configured via `gh secret set` (2026-07-06):
+
+| Secret | Status |
+|--------|--------|
+| `DOCKERHUB_USERNAME` | present |
+| `DOCKERHUB_TOKEN` | present |
+| `AWS_ACCESS_KEY_ID` | present |
+| `AWS_SECRET_ACCESS_KEY` | present |
+| `AWS_REGION` | present (`us-east-1`) |
+
+### Task 4 — Workflow committed
+
+| Artifact | Commit |
+|----------|--------|
+| `.github/workflows/psis-pe-aws-readiness.yml` | `ae778f4` |
+| `docs/reports/ACI_PE_001_AWS_Readiness_Report.md` | `ae778f4` |
+
+---
+
+## 1. GitHub Secrets Status (verified in CI)
+
+Validated by **PSIS PE AWS Readiness** workflow — all five required secrets **present**.
 
 ---
 
 ## 2. AWS Identity (`aws sts get-caller-identity`)
 
-| Field | Result |
+| Field | Value |
+|-------|-------|
+| Account ID | `526123657916` |
+| ARN | `arn:aws:iam::526123657916:user/nebula` |
+| Region | `us-east-1` |
+| Result | **PASS** |
+
+---
+
+## 3. App Runner Readiness (read-only)
+
+| Check | Result |
 |-------|--------|
-| Account ID | **Not verified** |
-| User/Role ARN | **Not verified** |
-| Region | **Not verified** (see §3) |
+| `apprunner:ListServices` | **FAIL** |
+| Service-linked role `AWSServiceRoleForAppRunner` | unknown_or_missing |
 
-**Local probe:** `aws sts get-caller-identity` failed — `Unable to locate credentials`.
+**Policy note:** [AWS App Runner is closed to new customers](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html) (2026). PSIS PE is a **new** deployment — **do not use App Runner**.
 
-**Next step:** Configure `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` in GitHub repository secrets, then run `.github/workflows/psis-pe-aws-readiness.yml` (workflow_dispatch).
-
----
-
-## 3. AWS Region
-
-| Item | Value |
-|------|-------|
-| Preferred region | `us-east-1` |
-| `AWS_REGION` secret | **missing** (probable) |
-| Resolved default for PE probes | `us-east-1` (used when secret unset in readiness workflow) |
-
-**Action:** Set `AWS_REGION` to `us-east-1` explicitly in GitHub secrets for operator clarity. Do not change region without approval.
+**Verdict:** App Runner **not ready** for PSIS PE (platform policy + API probe failure).
 
 ---
 
-## 4. App Runner Readiness
+## 4. IAM Permission Probes (read-only)
 
-### AWS platform policy (Jul 2026)
+| Capability | Probe | Result |
+|------------|-------|--------|
+| ECR `describe-repositories` | Read | **PASS** |
+| CloudWatch Logs `describe-log-groups` | Read | **PASS** |
+| ECS `list-clusters` | Read | **PASS** |
+| IAM `get-user` / role read | Read | **UNKNOWN** |
+| `iam:PassRole` (ECS Express deploy) | Create-time | **UNKNOWN** |
+| `ecs:CreateExpressGatewayService` | Create-time | **UNKNOWN** |
+| EFS | Not probed | **UNKNOWN** (future persistence ACI) |
 
-Per [AWS App Runner availability change](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html):
-
-> **AWS App Runner is no longer open to new customers.** Existing customers can continue. AWS recommends **Amazon ECS Express Mode** for new deployments.
-
-**Implication for PSIS:** PSIS PE is a **new** deployment. App Runner is **not the viable target** even if IAM credentials exist.
-
-### Read-only technical checks (not executed — no AWS creds)
-
-| Check | Expected without creds | Notes |
-|-------|------------------------|-------|
-| `aws apprunner list-services` | Not run | Would confirm API access for existing App Runner accounts only |
-| Service-linked role `AWSServiceRoleForAppRunner` | Not run | Required for App Runner operations |
-| Docker Hub as direct image source | N/A | Production App Runner deployments typically use **ECR**, not public Docker Hub |
-
-### App Runner readiness verdict
-
-| Verdict | Detail |
-|---------|--------|
-| **NOT READY for new PSIS PE** | Platform closed to new customers |
-| **Architecture docs update recommended** | Physical/Deployment architecture still list App Runner as preferred — should migrate PE target to ECS Express Mode |
+**IAM readiness summary:** Read-only access sufficient for ECR, CloudWatch, and ECS discovery. **Deploy-time permissions unconfirmed** until PE deploy ACI attempts `CreateExpressGatewayService` and ECR push.
 
 ---
 
-## 5. IAM Permission Assessment
+## 5. ECS Express Readiness
 
-No AWS identity available — permissions **UNKNOWN** for create/deploy operations.
+| Criterion | Assessment |
+|-----------|------------|
+| AWS identity valid | **Yes** |
+| ECS API reachable | **Yes** (`list-clusters` PASS) |
+| ECR API reachable | **Yes** (`describe-repositories` PASS) |
+| CloudWatch Logs reachable | **Yes** |
+| ECR repository for PSIS | **Not created** (expected — next ACI) |
+| ECS Express service | **Not created** (expected — next ACI) |
+| Recommended target | **ECS Express Mode** per AWS App Runner migration guidance |
 
-### Read-only probes (in readiness workflow when creds exist)
-
-| Permission area | Probe | Create-time permission |
-|-----------------|-------|------------------------|
-| App Runner | `apprunner:ListServices` | `apprunner:CreateService` — **N/A** (not recommended) |
-| ECS Express / Fargate | `ecs:ListClusters` | `ecs:CreateExpressGatewayService` — **UNKNOWN** |
-| ECR | `ecr:DescribeRepositories` | `ecr:CreateRepository`, `ecr:PutImage` — **UNKNOWN** |
-| CloudWatch Logs | `logs:DescribeLogGroups` | `logs:CreateLogGroup` — **UNKNOWN** |
-| IAM PassRole | — | `iam:PassRole` for `ecsTaskExecutionRole`, `ecsInfrastructureRoleForExpressServices` — **UNKNOWN** |
-| EFS | — | Not required for initial stateless PE; **UNKNOWN** if persistence ACI adds EFS |
-
-**Minimum IAM for recommended PE path (ECS Express + ECR):**
-
-- ECR: push/pull from GitHub Actions
-- ECS: create/manage Express Mode service
-- IAM: PassRole for ECS task + infrastructure roles
-- CloudWatch Logs: write container logs
-- (Optional later) EFS mount permissions for JSON data persistence
+**ECS Express readiness:** **Ready to proceed** to PE deploy ACI (subject to create-permission validation).
 
 ---
 
-## 6. Deployment Path Options
+## 6. Deployment Path Recommendation
 
-| Option | Description | Friction | PSIS fit (Jul 2026) |
-|--------|-------------|----------|---------------------|
-| **A** | App Runner directly from Docker Hub | Low *if* platform allowed | **Blocked** — App Runner closed to new customers; Hub not typical image source |
-| **B** | Mirror Hub → **ECR**, deploy **ECS Express Mode** | Medium — extend GHA with ECR push + express deploy action | **Recommended** — AWS official App Runner successor; same container, port 8080, health `GET /api/healthz` |
-| **C** | ECS Fargate (full task definition + ALB) | Higher — more IaC, more control | Valid if Express Mode insufficient (custom networking, EFS, multi-service) |
-
-### Recommendation
-
-**Option B — ECS Express Mode with ECR mirror**
-
-1. Keep existing PA pipeline: build, test, publish to Docker Hub (unchanged).
-2. Add PE workflow step: pull/tag/push same image to ECR (or build once, push both).
-3. Deploy via `aws-actions/amazon-ecs-deploy-express-service` or `aws ecs create-express-gateway-service`.
-4. Configure: port `8080`, health check `/api/healthz`, env `PORT=8080`, `NODE_ENV=production`, `BASE_PATH=/`.
-5. Plan separate ACI for EFS volume at `/app/artifacts/api-server/data` (JSON persistence).
+| Option | Verdict |
+|--------|---------|
+| A — App Runner from Docker Hub | **Blocked** |
+| B — Docker Hub → ECR → ECS Express Mode | **Recommended** |
+| C — ECS Fargate (full) | Fallback if Express Mode insufficient |
 
 ---
 
-## 7. Known Blockers
+## 7. Remaining Blockers
 
-1. **AWS GitHub secrets** — not confirmed present; PE cannot deploy from CI until configured.
-2. **AWS identity not verified** — `sts get-caller-identity` not executed with repository credentials.
-3. **App Runner unavailable for new PSIS PE** — platform policy (2026); conflicts with architecture docs stating App Runner preferred.
-4. **No ECR repository** — not created in this ACI (correct); required before PE deploy.
-5. **JSON persistence** — stateless PE possible; durable data needs EFS or alternative (future ACI).
-6. **Local/CI tooling gap** — `gh` CLI not authenticated on assessment machine; secret list API not queried directly.
-
----
-
-## 8. Required Operator Actions
-
-| # | Action | Priority |
-|---|--------|----------|
-| 1 | Add GitHub secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` (`us-east-1`) | **Required** |
-| 2 | Run **PSIS PE AWS Readiness** workflow (workflow_dispatch) to verify identity and IAM probes | **Required** |
-| 3 | Update architecture PE target from App Runner → **ECS Express Mode** (documentation ACI) | Recommended |
-| 4 | Create ECR repository `psis` (or similar) in `us-east-1` — in PE deploy ACI, not this one | Next ACI |
-| 5 | Provision IAM user/role with ECR + ECS Express + CloudWatch + PassRole permissions | Required |
-| 6 | Consider GitHub OIDC instead of long-lived access keys for PE deploy workflow | Recommended |
+| Blocker | Severity |
+|---------|----------|
+| App Runner unavailable for new PE | Informational — use ECS Express |
+| ECR repository not created | Required in next ACI |
+| `iam:PassRole` / ECS Express create not validated | Validate in PE deploy ACI |
+| JSON persistence (EFS) not configured | Separate persistence ACI |
+| IAM `get-user` probe UNKNOWN | Low — identity verified via STS |
 
 ---
 
-## 9. Artifacts Added by This ACI
+## 8. Operator Actions (updated)
 
-| Artifact | Purpose |
-|----------|---------|
-| `.github/workflows/psis-pe-aws-readiness.yml` | Read-only workflow_dispatch validation; uploads updated report artifact |
-| `docs/reports/ACI_PE_001_AWS_Readiness_Report.md` | This document |
-
-**No App Runner service, ECS service, ECR repository, or other production AWS resources were created.**
+| # | Action | Status |
+|---|--------|--------|
+| 1 | Configure AWS GitHub secrets | **Done** |
+| 2 | Run PE AWS Readiness workflow | **Done** — [run 28825726947](https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28825726947) |
+| 3 | Create ECR repository in `us-east-1` | Next ACI |
+| 4 | Extend GHA: ECR push + ECS Express deploy | Next ACI |
+| 5 | Confirm `ecsTaskExecutionRole` and `ecsInfrastructureRoleForExpressServices` | Next ACI |
+| 6 | Plan EFS mount for `/app/artifacts/api-server/data` | Persistence ACI |
 
 ---
 
-## 10. Final Status
+## 9. Final Status
 
-### **PARTIAL PASS**
+### **PASS**
 
-| Criterion | Met? |
-|-----------|------|
-| GitHub secrets status checked | ✓ (Docker Hub confirmed; AWS probable missing) |
-| AWS identity verified | ✗ (blocked — no credentials) |
-| Region confirmed | ✓ (default `us-east-1`; secret not set) |
-| App Runner readiness assessed | ✓ (not viable for new deployment) |
-| IAM risk assessed | ✓ (documented as UNKNOWN) |
-| Deployment path recommended | ✓ (ECS Express Mode + ECR) |
-| Readiness report created | ✓ |
+| Criterion | Met |
+|-----------|-----|
+| AWS credential file identified | ✓ |
+| AWS secrets added to GitHub | ✓ |
+| Readiness workflow committed and pushed | ✓ |
+| Readiness workflow runs successfully | ✓ |
+| AWS identity verified | ✓ |
+| Region confirmed | ✓ (`us-east-1`) |
+| IAM readiness assessed | ✓ (read probes PASS; create UNKNOWN) |
+| Report updated | ✓ |
 
-**PASS** for readiness *findings and documentation*; **PARTIAL PASS** overall because AWS credentials are not yet configured and identity is unverified.
-
-After operator configures AWS secrets and a successful readiness workflow run, status may advance to **PASS** for AWS identity while App Runner remains **not recommended**.
+ACI-PE-001 initial **PARTIAL PASS** is resolved for AWS credentials and identity. PE deployment should target **ECS Express Mode + ECR**, not App Runner.
 
 ---
 
 ## References
 
-- PA validation run: https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28822983314
+- Initial assessment: ACI-PE-001 (2026-07-06 local)
+- Recheck workflow: https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28825726947
 - AWS App Runner availability: https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html
-- PSIS architecture deployment docs: `docs/architecture/Deployment_Architecture.md`
+- PA validation: https://github.com/the-ai-guy-2k/psis_via_replit/actions/runs/28822983314
