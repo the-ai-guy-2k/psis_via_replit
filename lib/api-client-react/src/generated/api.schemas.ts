@@ -154,9 +154,12 @@ export interface Entry {
   /** Legacy flat outcome value, only present on entries created before the outcome wizard */
   result?: ResultOutcome;
   resultCategory: ResultCategory;
+  /** Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately). */
   goodCount: number;
+  /** Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run hit is still 1 unit), 0 otherwise. */
   badCount: number;
   strikeoutCount: number;
+  /** Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed/stored separately but not subtracted. */
   delta: number;
   /** Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed. */
   inningNumber?: number;
@@ -183,10 +186,13 @@ export interface InningState {
   /** True once outs reach 3 */
   completed: boolean;
   totalAtBats: number;
+  /** Official EABR good units summed across this inning's at-bats (see Entry.goodCount; already includes any players-left-on-base units). */
   goodCount: number;
+  /** Official EABR bad units summed across this inning's at-bats (see Entry.badCount). */
   badCount: number;
+  /** Official EABR Delta for the inning: sum(entry.delta) = Good Units - Bad Units. Runs scored are not subtracted. */
   inningDelta: number;
-  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored */
+  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored. Tracked for display only — no longer subtracted from inningDelta. */
   runsScored: number;
   /** Runners left on base, auto-calculated from base occupancy once the inning completes */
   playersLeftOnBase: number;

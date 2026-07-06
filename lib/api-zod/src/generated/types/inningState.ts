@@ -17,10 +17,13 @@ export interface InningState {
   /** True once outs reach 3 */
   completed: boolean;
   totalAtBats: number;
+  /** Official EABR good units summed across this inning's at-bats (see Entry.goodCount; already includes any players-left-on-base units). */
   goodCount: number;
+  /** Official EABR bad units summed across this inning's at-bats (see Entry.badCount). */
   badCount: number;
+  /** Official EABR Delta for the inning: sum(entry.delta) = Good Units - Bad Units. Runs scored are not subtracted. */
   inningDelta: number;
-  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored */
+  /** Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored. Tracked for display only — no longer subtracted from inningDelta. */
   runsScored: number;
   /** Runners left on base, auto-calculated from base occupancy once the inning completes */
   playersLeftOnBase: number;

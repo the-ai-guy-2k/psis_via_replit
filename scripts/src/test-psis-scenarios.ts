@@ -69,10 +69,11 @@ function simulateAtBat(entries: Entry[], gameId: number, input: SimAtBatInput): 
     baseStateBefore,
   );
   const resultCategory = resultCategoryForOutcomeCategory(input.outcomeCategory);
-  const goodCount = resultCategory === "good" ? 1 : 0;
+  // Official EABR unit rule: each qualifying event is worth exactly 1 unit
+  // regardless of play detail (mirrors artifacts/api-server/src/routes/entries.ts).
+  const baseGoodCount = resultCategory === "good" ? 1 : 0;
   const badCount = resultCategory === "bad" ? 1 : 0;
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
-  const delta = goodCount - badCount - runsScored;
 
   const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType, input.outcomeDetail);
   const outsAdded = Math.min(rawOuts, 3 - currentOuts);
@@ -80,6 +81,13 @@ function simulateAtBat(entries: Entry[], gameId: number, input: SimAtBatInput): 
   const playersLeftOnBase = inningJustCompleted
     ? [baseStateAfter.firstBase, baseStateAfter.secondBase, baseStateAfter.thirdBase].filter(Boolean).length
     : undefined;
+
+  // Official EABR rule: each player left on base at inning-completion is
+  // worth 1 additional good unit, folded into this completing entry's
+  // goodCount. Official EABR Delta = Good Units - Bad Units (runsScored is
+  // still computed/stored but no longer subtracted).
+  const goodCount = baseGoodCount + (playersLeftOnBase ?? 0);
+  const delta = goodCount - badCount;
 
   const entry: Entry = {
     id: nextId(),
@@ -239,6 +247,11 @@ runScenario("lob-on-inning-complete", "Players Left On Base At Inning Completion
   const thirdOut = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" }); // 3rd out
   check("playersLeftOnBase computed on the at-bat that records the 3rd out", 2, thirdOut.playersLeftOnBase);
 
+  // Official EABR rule: each player left on base is worth 1 good unit,
+  // folded into the completing at-bat's own goodCount (strikeout's base 1
+  // unit + 2 LOB units = 3).
+  check("LOB units are folded into the completing at-bat's goodCount as extra good units (1 base + 2 LOB = 3)", 3, thirdOut.goodCount);
+
   const inning = computeInningState(entries, 1, gameId);
   check("inning-level LOB matches the completing at-bat's LOB", 2, inning.playersLeftOnBase);
 });
@@ -268,42 +281,44 @@ runScenario("good-bad-eabr-classification", "Good/Bad EABR Classification", "Goo
 // Scenario 5: Fraction (good/total-at-bats, as shown on the scoreboard)
 // ---------------------------------------------------------------------------
 
-runScenario("good-total-fraction", "Good-Count / Total-At-Bats Fraction", "Fraction", (check) => {
+runScenario("good-bad-eabr-fraction", "Good Units / Bad Units Fraction (Official EABR Fraction)", "Fraction", (check) => {
   const gameId = 6;
   const entries: Entry[] = [];
   simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" }); // good
   simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "walk" }); // bad, batter reaches 1st
   simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "fly_out", outcomeDetail: "infield" }); // good, outs never move runners
-  const finalOut = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "ground_out", outcomeDetail: "single_play" }); // good, 3rd out
+  const finalOut = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "ground_out", outcomeDetail: "single_play" }); // good, 3rd out; walk's runner (1) is left on base
+
+  check("LOB (1 runner left on base) is folded into the completing at-bat's goodCount as 1 extra good unit (1 base + 1 LOB = 2)", 2, finalOut.goodCount);
 
   const inning = computeInningState(entries, 1, gameId);
   check("total at-bats is 4", 4, inning.totalAtBats);
-  check("good count is 3 (3 defense outcomes)", 3, inning.goodCount);
-  check("bad count is 1 (1 offense outcome)", 1, inning.badCount);
-  check("fraction (goodCount/totalAtBats) is 3/4", 3 / 4, inning.goodCount / inning.totalAtBats);
+  check("good units total is 4 (3 base defense units + 1 LOB unit)", 4, inning.goodCount);
+  check("bad units total is 1 (1 offense outcome)", 1, inning.badCount);
+  check("official EABR fraction is Good Units / Bad Units = 4/1", 4, inning.goodCount / inning.badCount);
   check("inning completed after the 4th at-bat's 3rd out", true, inning.completed);
   check("the walk's runner is still on 1st at the 3rd out (defensive outs never advance/clear runners)", 1, finalOut.playersLeftOnBase);
 });
 
 // ---------------------------------------------------------------------------
-// Scenario 6: Inning delta (Good - Bad - RunsScored)
+// Scenario 6: Inning delta (Official EABR Delta = Good Units - Bad Units)
 // ---------------------------------------------------------------------------
 
-runScenario("inning-delta-formula", "Inning Delta = Good - Bad - RunsScored", "Inning Delta", (check) => {
+runScenario("inning-delta-formula", "Inning Delta = Good Units - Bad Units (Official EABR Delta)", "Inning Delta", (check) => {
   const gameId = 7;
   const entries: Entry[] = [];
   const e1 = simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "triple" }); // bad, 0 runs (bases were empty)
   const e2 = simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "single" }); // bad, scores the runner on 3rd -> 1 run
   check("2nd at-bat's single scores the runner on 3rd", 1, e2.runsScored);
-  check("per-entry delta = good - bad - runs (0 - 1 - 1 = -2)", -2, e2.delta);
+  check("per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored", -1, e2.delta);
 
-  const e3 = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" }); // good, 0 runs
-  check("per-entry delta for a good outcome with no runs is +1", 1, e3.delta);
+  const e3 = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" }); // good, no LOB yet
+  check("per-entry delta for a good outcome is +1", 1, e3.delta);
 
   const inning = computeInningState(entries, 1, gameId);
   const expectedInningDelta = e1.delta + e2.delta + e3.delta;
   check("computeInningState's inningDelta equals sum(entry.delta) over the inning", expectedInningDelta, inning.inningDelta);
-  check("inningDelta reflects both bad hits and the good strikeout (-1 + -2 + 1 = -2 total)", -2, inning.inningDelta);
+  check("inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)", -1, inning.inningDelta);
 });
 
 // ---------------------------------------------------------------------------

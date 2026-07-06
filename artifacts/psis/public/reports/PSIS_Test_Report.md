@@ -1,11 +1,11 @@
 # PSIS Test Report
 
-Generated: 2026-07-06T01:33:03.225Z
+Generated: 2026-07-06T01:54:58.895Z
 
 **Overall status: PASS**
 
 - Scenarios: 10/10 passed
-- Assertions: 61/61 passed
+- Assertions: 63/63 passed
 
 This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports and exercises the real, unduplicated PSIS game-logic functions from `@workspace/psis-game-logic` (the same module the live API server uses).
 
@@ -17,10 +17,10 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 | Outs | Outs Are Capped At 3 Per Inning (Completed Innings) | PASS | 5/5 |
 | Runs | Runs Scored: Hit Advancement | PASS | 6/6 |
 | Runs | Runs Scored: Forced-Advancement Walks | PASS | 8/8 |
-| LOB | Players Left On Base At Inning Completion | PASS | 3/3 |
+| LOB | Players Left On Base At Inning Completion | PASS | 4/4 |
 | Good/Bad EABR | Good/Bad EABR Classification | PASS | 8/8 |
-| Fraction | Good-Count / Total-At-Bats Fraction | PASS | 6/6 |
-| Inning Delta | Inning Delta = Good - Bad - RunsScored | PASS | 5/5 |
+| Fraction | Good Units / Bad Units Fraction (Official EABR Fraction) | PASS | 7/7 |
+| Inning Delta | Inning Delta = Good Units - Bad Units (Official EABR Delta) | PASS | 5/5 |
 | Completed Innings | Completed Innings Auto-Advance To The Next Inning | PASS | 5/5 |
 | Reset Game State | New Game Reset Scopes The Live View By gameId | PASS | 8/8 |
 
@@ -68,6 +68,7 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 
 - [PASS] playersLeftOnBase is undefined mid-inning (not the 3rd out)
 - [PASS] playersLeftOnBase computed on the at-bat that records the 3rd out
+- [PASS] LOB units are folded into the completing at-bat's goodCount as extra good units (1 base + 2 LOB = 3)
 - [PASS] inning-level LOB matches the completing at-bat's LOB
 
 ### Good/Bad EABR Classification (Good/Bad EABR) — PASS
@@ -81,22 +82,23 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 - [PASS] walk entry does not set strikeoutCount
 - [PASS] walk entry goodCount/badCount are 0/1
 
-### Good-Count / Total-At-Bats Fraction (Fraction) — PASS
+### Good Units / Bad Units Fraction (Official EABR Fraction) (Fraction) — PASS
 
+- [PASS] LOB (1 runner left on base) is folded into the completing at-bat's goodCount as 1 extra good unit (1 base + 1 LOB = 2)
 - [PASS] total at-bats is 4
-- [PASS] good count is 3 (3 defense outcomes)
-- [PASS] bad count is 1 (1 offense outcome)
-- [PASS] fraction (goodCount/totalAtBats) is 3/4
+- [PASS] good units total is 4 (3 base defense units + 1 LOB unit)
+- [PASS] bad units total is 1 (1 offense outcome)
+- [PASS] official EABR fraction is Good Units / Bad Units = 4/1
 - [PASS] inning completed after the 4th at-bat's 3rd out
 - [PASS] the walk's runner is still on 1st at the 3rd out (defensive outs never advance/clear runners)
 
-### Inning Delta = Good - Bad - RunsScored (Inning Delta) — PASS
+### Inning Delta = Good Units - Bad Units (Official EABR Delta) (Inning Delta) — PASS
 
 - [PASS] 2nd at-bat's single scores the runner on 3rd
-- [PASS] per-entry delta = good - bad - runs (0 - 1 - 1 = -2)
-- [PASS] per-entry delta for a good outcome with no runs is +1
+- [PASS] per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored
+- [PASS] per-entry delta for a good outcome is +1
 - [PASS] computeInningState's inningDelta equals sum(entry.delta) over the inning
-- [PASS] inningDelta reflects both bad hits and the good strikeout (-1 + -2 + 1 = -2 total)
+- [PASS] inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)
 
 ### Completed Innings Auto-Advance To The Next Inning (Completed Innings) — PASS
 

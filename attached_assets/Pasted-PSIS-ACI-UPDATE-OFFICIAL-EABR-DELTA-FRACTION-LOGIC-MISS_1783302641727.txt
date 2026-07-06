@@ -1,0 +1,158 @@
+PSIS ACI UPDATE — OFFICIAL EABR DELTA + FRACTION LOGIC
+
+MISSION
+
+Update PSIS so EABR calculations follow the official PSIS logic below.
+
+This replaces any previous EABR fraction or delta logic.
+
+==================================================
+OFFICIAL EABR UNIT RULE
+==================================================
+
+During an inning, each qualifying event counts as 1 EABR unit.
+
+Do not count outs quantity as multiple good units.
+
+Example:
+
+Ground Out → Double Play = 1 good EABR unit
+Ground Out → Triple Play = 1 good EABR unit
+
+The play detail is still recorded, but it does not add extra EABR units.
+
+==================================================
+GOOD EABR UNITS
+==================================================
+
+Count each as 1 good unit:
+
+- Strikeout
+- Fly Out
+- Ground Out
+  - Single Play = 1 good unit
+  - Double Play = 1 good unit
+  - Triple Play = 1 good unit
+- LOB
+  - Each player left on base = 1 good unit
+  - Example: 3 players left on base = 3 good units
+
+==================================================
+BAD EABR UNITS
+==================================================
+
+Count each as 1 bad unit:
+
+- Hit
+- Walk
+- Home Run
+- Extra Base Hit
+
+For extra base hits:
+
+- Record whether it was Double or Triple
+- But do not give extra penalty units for Double or Triple
+- It still counts as 1 bad EABR unit
+
+==================================================
+DO NOT USE FOR EABR UNIT COUNT
+==================================================
+
+Do not use these as extra EABR units:
+
+- Number of outs created
+- Number of runs scored
+- Double play as 2 good units
+- Triple play as 3 good units
+- Double as 2 bad units
+- Triple as 3 bad units
+
+Those details may be stored, but they do not change EABR unit count.
+
+==================================================
+OFFICIAL EABR FRACTION
+==================================================
+
+EABR Fraction:
+
+Total Good Units at end of inning
+/
+Total Bad Units at end of inning
+
+Example:
+
+Good Units = 4
+Bad Units = 2
+
+EABR Fraction = 4/2
+
+==================================================
+OFFICIAL EABR DELTA
+==================================================
+
+EABR Delta:
+
+Total Good Units at end of inning
+-
+Total Bad Units at end of inning
+
+Example:
+
+Good Units = 4
+Bad Units = 2
+
+EABR Delta = +2
+
+==================================================
+IMPORTANT CHANGE
+==================================================
+
+Remove runs scored from the EABR delta formula.
+
+Runs scored should still be calculated and stored if already supported, but it should not be subtracted in the official EABR Delta.
+
+Old formula:
+
+goodCount - badCount - runsScored
+
+New official formula:
+
+goodUnits - badUnits
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Double Play counts as 1 good EABR unit.
+
+2. Triple Play counts as 1 good EABR unit.
+
+3. Double hit counts as 1 bad EABR unit.
+
+4. Triple hit counts as 1 bad EABR unit.
+
+5. Each player left on base counts as 1 good EABR unit.
+
+6. Runs scored are not included in EABR Delta.
+
+7. EABR Fraction displays Good Units / Bad Units.
+
+8. EABR Delta displays Good Units - Bad Units.
+
+9. Existing scenario tests are updated to match this official logic.
+
+10. Test report regenerates after update.
+
+==================================================
+REPORT BACK
+==================================================
+
+Return:
+
+- Files changed
+- Logic updated
+- Test cases updated
+- New test results
+- PASS / PARTIAL PASS / FAIL

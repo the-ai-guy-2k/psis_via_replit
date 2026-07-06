@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-07-06T01:33:03.225Z",
+  "generatedAt": "2026-07-06T01:54:58.895Z",
   "overallStatus": "PASS",
   "summary": {
     "totalScenarios": 10,
     "passed": 10,
     "failed": 0,
-    "totalAssertions": 61,
-    "passedAssertions": 61,
+    "totalAssertions": 63,
+    "passedAssertions": 63,
     "failedAssertions": 0
   },
   "scenarios": [
@@ -277,6 +277,12 @@
           "pass": true
         },
         {
+          "description": "LOB units are folded into the completing at-bat's goodCount as extra good units (1 base + 2 LOB = 3)",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
           "description": "inning-level LOB matches the completing at-bat's LOB",
           "expected": 2,
           "actual": 2,
@@ -353,11 +359,17 @@
       ]
     },
     {
-      "id": "good-total-fraction",
-      "name": "Good-Count / Total-At-Bats Fraction",
+      "id": "good-bad-eabr-fraction",
+      "name": "Good Units / Bad Units Fraction (Official EABR Fraction)",
       "category": "Fraction",
       "status": "PASS",
       "assertions": [
+        {
+          "description": "LOB (1 runner left on base) is folded into the completing at-bat's goodCount as 1 extra good unit (1 base + 1 LOB = 2)",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
         {
           "description": "total at-bats is 4",
           "expected": 4,
@@ -365,21 +377,21 @@
           "pass": true
         },
         {
-          "description": "good count is 3 (3 defense outcomes)",
-          "expected": 3,
-          "actual": 3,
+          "description": "good units total is 4 (3 base defense units + 1 LOB unit)",
+          "expected": 4,
+          "actual": 4,
           "pass": true
         },
         {
-          "description": "bad count is 1 (1 offense outcome)",
+          "description": "bad units total is 1 (1 offense outcome)",
           "expected": 1,
           "actual": 1,
           "pass": true
         },
         {
-          "description": "fraction (goodCount/totalAtBats) is 3/4",
-          "expected": 0.75,
-          "actual": 0.75,
+          "description": "official EABR fraction is Good Units / Bad Units = 4/1",
+          "expected": 4,
+          "actual": 4,
           "pass": true
         },
         {
@@ -398,7 +410,7 @@
     },
     {
       "id": "inning-delta-formula",
-      "name": "Inning Delta = Good - Bad - RunsScored",
+      "name": "Inning Delta = Good Units - Bad Units (Official EABR Delta)",
       "category": "Inning Delta",
       "status": "PASS",
       "assertions": [
@@ -409,27 +421,27 @@
           "pass": true
         },
         {
-          "description": "per-entry delta = good - bad - runs (0 - 1 - 1 = -2)",
-          "expected": -2,
-          "actual": -2,
+          "description": "per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored",
+          "expected": -1,
+          "actual": -1,
           "pass": true
         },
         {
-          "description": "per-entry delta for a good outcome with no runs is +1",
+          "description": "per-entry delta for a good outcome is +1",
           "expected": 1,
           "actual": 1,
           "pass": true
         },
         {
           "description": "computeInningState's inningDelta equals sum(entry.delta) over the inning",
-          "expected": -2,
-          "actual": -2,
+          "expected": -1,
+          "actual": -1,
           "pass": true
         },
         {
-          "description": "inningDelta reflects both bad hits and the good strikeout (-1 + -2 + 1 = -2 total)",
-          "expected": -2,
-          "actual": -2,
+          "description": "inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)",
+          "expected": -1,
+          "actual": -1,
           "pass": true
         }
       ]

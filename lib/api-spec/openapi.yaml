@@ -281,12 +281,23 @@ components:
           $ref: "#/components/schemas/ResultCategory"
         goodCount:
           type: integer
+          description: >-
+            Official EABR good units for this at-bat. 1 unit for a good
+            outcome (never scaled by outcomeDetail, e.g. a double_play or
+            triple_play ground_out is still 1 unit), plus 1 additional unit
+            per player left on base if this at-bat completed the inning
+            (playersLeftOnBase folded in here, not tracked separately).
         badCount:
           type: integer
+          description: >-
+            Official EABR bad units for this at-bat. 1 unit for a bad
+            outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run
+            hit is still 1 unit), 0 otherwise.
         strikeoutCount:
           type: integer
         delta:
           type: integer
+          description: "Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed/stored separately but not subtracted."
         inningNumber:
           type: integer
           description: Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.
@@ -346,13 +357,16 @@ components:
           type: integer
         goodCount:
           type: integer
+          description: Official EABR good units summed across this inning's at-bats (see Entry.goodCount; already includes any players-left-on-base units).
         badCount:
           type: integer
+          description: Official EABR bad units summed across this inning's at-bats (see Entry.badCount).
         inningDelta:
           type: integer
+          description: "Official EABR Delta for the inning: sum(entry.delta) = Good Units - Bad Units. Runs scored are not subtracted."
         runsScored:
           type: integer
-          description: Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored
+          description: Total runs scored across this inning's at-bats, summed from each at-bat's computed runsScored. Tracked for display only — no longer subtracted from inningDelta.
         playersLeftOnBase:
           type: integer
           description: Runners left on base, auto-calculated from base occupancy once the inning completes

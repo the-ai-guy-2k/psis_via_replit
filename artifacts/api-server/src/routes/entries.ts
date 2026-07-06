@@ -78,7 +78,11 @@ router.post("/entries", async (req, res): Promise<void> => {
   }
 
   const resultCategory = resultCategoryForOutcomeCategory(input.outcomeCategory);
-  const goodCount = !isRunScored && resultCategory === "good" ? 1 : 0;
+  // Official EABR unit rule: each qualifying event is worth exactly 1 unit,
+  // regardless of play detail (a ground_out/double_play or /triple_play is
+  // still only 1 good unit; a double/triple/home_run hit is still only 1 bad
+  // unit). Play detail is stored (outcomeDetail) but never multiplies units.
+  const baseGoodCount = !isRunScored && resultCategory === "good" ? 1 : 0;
   const badCount = !isRunScored && resultCategory === "bad" ? 1 : 0;
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
 
@@ -89,8 +93,6 @@ router.post("/entries", async (req, res): Promise<void> => {
   const { baseState: baseStateAfterAtBat, runsScored } = isRunScored
     ? { baseState: baseStateBeforeAtBat, runsScored: input.runsScored! }
     : applyOutcomeToBaseState(input.outcomeCategory, input.outcomeType, input.outcomeDetail, baseStateBeforeAtBat);
-
-  const delta = goodCount - badCount - runsScored;
 
   const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType, input.outcomeDetail);
   const outsAdded = Math.min(rawOuts, 3 - currentOuts);
@@ -103,6 +105,16 @@ router.post("/entries", async (req, res): Promise<void> => {
   const playersLeftOnBase = inningJustCompleted
     ? [baseStateAfterAtBat.firstBase, baseStateAfterAtBat.secondBase, baseStateAfterAtBat.thirdBase].filter(Boolean).length
     : undefined;
+
+  // Official EABR rule: each player left on base at inning-completion is
+  // worth 1 additional good unit, folded into this completing entry's
+  // goodCount (see "neutralize-and-bake-in" pattern — keeps computeInningState's
+  // sum(entry.goodCount) correct with no separate LOB-units aggregation).
+  const goodCount = baseGoodCount + (playersLeftOnBase ?? 0);
+
+  // Official EABR Delta = Good Units - Bad Units. Runs scored are still
+  // computed/stored (see runsScored above) but are no longer subtracted.
+  const delta = goodCount - badCount;
 
   const entry = {
     ...input,

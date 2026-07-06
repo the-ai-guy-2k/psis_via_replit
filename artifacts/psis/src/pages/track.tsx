@@ -39,7 +39,7 @@ const emptyWizard: WizardState = { started: false };
 const SCOREBOARD_INNINGS = 9;
 
 type ScoreboardSlot =
-  | { inningNumber: number; completed: true; delta: number; goodCount: number; totalAtBats: number }
+  | { inningNumber: number; completed: true; delta: number; goodCount: number; badCount: number }
   | { inningNumber: number; completed: false };
 
 /**
@@ -56,25 +56,25 @@ type ScoreboardSlot =
  * placeholders (row 1/2 blank, row 3 shows the inning number).
  */
 function computeScoreboardSlots(
-  entries: { inningNumber?: number; delta: number; outsAdded?: number; goodCount: number; gameId?: number }[] | undefined,
+  entries: { inningNumber?: number; delta: number; outsAdded?: number; goodCount: number; badCount: number; gameId?: number }[] | undefined,
   currentGameId: number | undefined,
 ): ScoreboardSlot[] {
-  const byInning = new Map<number, { delta: number; outs: number; goodCount: number; totalAtBats: number }>();
+  const byInning = new Map<number, { delta: number; outs: number; goodCount: number; badCount: number }>();
   for (const entry of entries ?? []) {
     if (entry.inningNumber === undefined) continue;
     if (currentGameId !== undefined && (entry.gameId ?? 1) !== currentGameId) continue;
-    const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0, goodCount: 0, totalAtBats: 0 };
+    const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0, goodCount: 0, badCount: 0 };
     current.delta += entry.delta;
     current.outs += entry.outsAdded ?? 0;
     current.goodCount += entry.goodCount;
-    current.totalAtBats += 1;
+    current.badCount += entry.badCount;
     byInning.set(entry.inningNumber, current);
   }
   return Array.from({ length: SCOREBOARD_INNINGS }, (_, i) => {
     const inningNumber = i + 1;
     const v = byInning.get(inningNumber);
     if (v && v.outs >= 3) {
-      return { inningNumber, completed: true as const, delta: v.delta, goodCount: v.goodCount, totalAtBats: v.totalAtBats };
+      return { inningNumber, completed: true as const, delta: v.delta, goodCount: v.goodCount, badCount: v.badCount };
     }
     return { inningNumber, completed: false as const };
   });
@@ -389,7 +389,7 @@ export default function Track() {
                             className="border-l h-7 px-1 text-center align-middle font-mono text-[10px] text-muted-foreground"
                             data-testid={`scoreboard-fraction-${slot.inningNumber}`}
                           >
-                            {slot.completed ? `${slot.goodCount}/${slot.totalAtBats}` : ""}
+                            {slot.completed ? `${slot.goodCount}/${slot.badCount}` : ""}
                           </td>
                         ))}
                       </tr>

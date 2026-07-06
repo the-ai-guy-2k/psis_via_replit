@@ -31,9 +31,12 @@ export interface Entry {
   /** Legacy flat outcome value, only present on entries created before the outcome wizard */
   result?: ResultOutcome;
   resultCategory: ResultCategory;
+  /** Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately). */
   goodCount: number;
+  /** Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run hit is still 1 unit), 0 otherwise. */
   badCount: number;
   strikeoutCount: number;
+  /** Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed/stored separately but not subtracted. */
   delta: number;
   /** Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed. */
   inningNumber?: number;
