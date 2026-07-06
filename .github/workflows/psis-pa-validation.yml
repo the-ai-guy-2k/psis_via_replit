@@ -69,33 +69,33 @@ jobs:
           echo "result=PASS" >> "$GITHUB_OUTPUT"
           echo "image_tag=${IMAGE_NAME}:ci-${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      - name: Container smoke test
+      - name: Container smoke test (local build)
         id: smoke
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:ci-${{ github.sha }}
         run: |
           set -euo pipefail
-
           host_port=18080
+          container_name=psis-pa-smoke
 
           cleanup() {
-            docker stop psis-pa-smoke 2>/dev/null || true
-            docker rm psis-pa-smoke 2>/dev/null || true
+            docker stop "${container_name}" 2>/dev/null || true
+            docker rm "${container_name}" 2>/dev/null || true
           }
           trap cleanup EXIT
 
           start_ms=$(date +%s%3N)
-          docker run -d --name psis-pa-smoke -p "${host_port}:8080" \
+          docker run -d --name "${container_name}" -p "${host_port}:8080" \
             -e PORT=8080 \
             -e NODE_ENV=production \
             -e BASE_PATH=/ \
             "$IMAGE"
 
           sleep 2
-          if ! docker ps --filter "name=psis-pa-smoke" --filter "status=running" | grep -q psis-pa-smoke; then
+          if ! docker ps --filter "name=${container_name}" --filter "status=running" | grep -q "${container_name}"; then
             echo "Container is not running after startup."
-            docker ps -a --filter "name=psis-pa-smoke" || true
-            docker logs psis-pa-smoke || true
+            docker ps -a --filter "name=${container_name}" || true
+            docker logs "${container_name}" || true
             exit 1
           fi
 
@@ -111,7 +111,7 @@ jobs:
 
           if [ "$health_ok" != true ]; then
             echo "Health endpoint did not become ready within 60 seconds."
-            docker logs psis-pa-smoke || true
+            docker logs "${container_name}" || true
             exit 1
           fi
 
@@ -128,54 +128,171 @@ jobs:
           fi
 
           root_code=$(curl -s -o /tmp/root.html -w "%{http_code}" "http://localhost:${host_port}/")
-          echo "GET / status: ${root_code}"
           if [ "$root_code" = "200" ] && grep -q 'id="root"' /tmp/root.html; then
             echo "frontend_result=PASS" >> "$GITHUB_OUTPUT"
           else
             echo "Frontend validation failed with HTTP ${root_code}"
-            head -n 20 /tmp/root.html || true
             exit 1
           fi
 
           track_code=$(curl -s -o /tmp/track.html -w "%{http_code}" "http://localhost:${host_port}/track")
-          echo "GET /track status: ${track_code}"
           if [ "$track_code" = "200" ] && grep -q 'id="root"' /tmp/track.html; then
             echo "spa_result=PASS" >> "$GITHUB_OUTPUT"
           else
             echo "SPA route validation failed with HTTP ${track_code}"
-            head -n 20 /tmp/track.html || true
             exit 1
           fi
 
           echo "container_result=PASS" >> "$GITHUB_OUTPUT"
 
-      - name: Validate Docker Hub authentication
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate validation report
+      - name: Publish Docker image to Docker Hub
+        id: publish
+        run: |
+          set -euo pipefail
+
+          docker tag "${IMAGE_NAME}:ci-${{ github.sha }}" "${IMAGE_NAME}:latest"
+          docker tag "${IMAGE_NAME}:ci-${{ github.sha }}" "${IMAGE_NAME}:${{ github.sha }}"
+
+          docker push "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:${{ github.sha }}"
+
+          digest=$(docker buildx imagetools inspect "${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}')
+
+          echo "publish_result=PASS" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE_NAME}:latest and ${IMAGE_NAME}:${{ github.sha }}"
+          echo "Image digest: ${digest}"
+
+      - name: Verify Docker Hub tags
+        id: verify_tags
+        run: |
+          set -euo pipefail
+
+          docker buildx imagetools inspect "${IMAGE_NAME}:latest" > /tmp/inspect-latest.json
+          docker buildx imagetools inspect "${IMAGE_NAME}:${{ github.sha }}" > /tmp/inspect-sha.json
+
+          latest_digest=$(docker buildx imagetools inspect "${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}')
+          sha_digest=$(docker buildx imagetools inspect "${IMAGE_NAME}:${{ github.sha }}" --format '{{.Manifest.Digest}}')
+
+          if [ "${latest_digest}" != "${sha_digest}" ]; then
+            echo "Tag digests do not match."
+            echo "latest: ${latest_digest}"
+            echo "sha: ${sha_digest}"
+            exit 1
+          fi
+
+          echo "latest_tag=PASS" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=PASS" >> "$GITHUB_OUTPUT"
+          echo "Verified tags latest and ${{ github.sha }} share digest ${latest_digest}"
+
+      - name: Pull published image from Docker Hub
+        id: pull
+        run: |
+          set -euo pipefail
+
+          docker rmi "${IMAGE_NAME}:ci-${{ github.sha }}" 2>/dev/null || true
+          docker rmi "${IMAGE_NAME}:latest" 2>/dev/null || true
+          docker rmi "${IMAGE_NAME}:${{ github.sha }}" 2>/dev/null || true
+
+          docker pull "${IMAGE_NAME}:latest"
+
+          echo "pull_result=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Validate published image
+        id: published_smoke
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:latest
+        run: |
+          set -euo pipefail
+          host_port=18081
+          container_name=psis-pa-published
+
+          cleanup() {
+            docker stop "${container_name}" 2>/dev/null || true
+            docker rm "${container_name}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker run -d --name "${container_name}" -p "${host_port}:8080" \
+            -e PORT=8080 \
+            -e NODE_ENV=production \
+            -e BASE_PATH=/ \
+            "$IMAGE"
+
+          sleep 2
+          if ! docker ps --filter "name=${container_name}" --filter "status=running" | grep -q "${container_name}"; then
+            echo "Published container is not running after startup."
+            docker logs "${container_name}" || true
+            exit 1
+          fi
+
+          health_ok=false
+          for _ in $(seq 1 60); do
+            if curl -sf "http://localhost:${host_port}/api/healthz" > /tmp/published-health.json; then
+              health_ok=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$health_ok" != true ]; then
+            echo "Published image health endpoint did not become ready."
+            docker logs "${container_name}" || true
+            exit 1
+          fi
+
+          health_body=$(cat /tmp/published-health.json)
+          if echo "$health_body" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+            echo "health_result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unexpected published health response: ${health_body}"
+            exit 1
+          fi
+
+          root_code=$(curl -s -o /tmp/published-root.html -w "%{http_code}" "http://localhost:${host_port}/")
+          if [ "$root_code" = "200" ] && grep -q 'id="root"' /tmp/published-root.html; then
+            echo "frontend_result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published frontend validation failed with HTTP ${root_code}"
+            exit 1
+          fi
+
+          track_code=$(curl -s -o /tmp/published-track.html -w "%{http_code}" "http://localhost:${host_port}/track")
+          if [ "$track_code" = "200" ] && grep -q 'id="root"' /tmp/published-track.html; then
+            echo "spa_result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published SPA route validation failed with HTTP ${track_code}"
+            exit 1
+          fi
+
+          echo "container_result=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Generate PA validation report
         env:
           COMMIT_SHA: ${{ github.sha }}
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          NODE_VERSION: ${{ steps.toolchain.outputs.node_version }}
-          PNPM_VERSION: ${{ steps.toolchain.outputs.pnpm_version }}
-          TEST_RESULT: ${{ steps.test.outputs.result }}
-          BUILD_RESULT: ${{ steps.build.outputs.result }}
-          DOCKER_BUILD_RESULT: ${{ steps.docker_build.outputs.result }}
-          IMAGE_TAG: ${{ steps.docker_build.outputs.image_tag }}
-          CONTAINER_RESULT: ${{ steps.smoke.outputs.container_result }}
-          HEALTH_RESULT: ${{ steps.smoke.outputs.health_result }}
-          FRONTEND_RESULT: ${{ steps.smoke.outputs.frontend_result }}
-          SPA_RESULT: ${{ steps.smoke.outputs.spa_result }}
-          STARTUP_MS: ${{ steps.smoke.outputs.startup_ms }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ steps.publish.outputs.image_digest }}
+          PUBLISH_RESULT: ${{ steps.publish.outputs.publish_result }}
+          PULL_RESULT: ${{ steps.pull.outputs.pull_result }}
+          LATEST_TAG_RESULT: ${{ steps.verify_tags.outputs.latest_tag }}
+          SHA_TAG_RESULT: ${{ steps.verify_tags.outputs.sha_tag }}
+          PUBLISHED_HEALTH: ${{ steps.published_smoke.outputs.health_result }}
+          PUBLISHED_FRONTEND: ${{ steps.published_smoke.outputs.frontend_result }}
+          PUBLISHED_SPA: ${{ steps.published_smoke.outputs.spa_result }}
+          PUBLISHED_CONTAINER: ${{ steps.published_smoke.outputs.container_result }}
         run: |
           mkdir -p docs/reports
           {
-            echo "# PSIS PA CI Validation Report"
+            echo "# PSIS Production Artifact (PA) Validation Report"
             echo ""
             echo "**Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
             echo "**Workflow Name:** ${WORKFLOW_NAME}"
@@ -183,50 +300,49 @@ jobs:
             echo "**Run URL:** ${RUN_URL}"
             echo "**Commit SHA:** \`${COMMIT_SHA}\`"
             echo ""
-            echo "## Toolchain"
+            echo "## Docker Image"
             echo ""
-            echo "| Component | Version |"
-            echo "|-----------|---------|"
-            echo "| Node.js | ${NODE_VERSION} |"
-            echo "| pnpm | ${PNPM_VERSION} |"
-            echo "| Runner | ubuntu-latest |"
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Image Name | \`${IMAGE_NAME}\` |"
+            echo "| Tags | \`latest\`, \`${COMMIT_SHA}\` |"
+            echo "| Image Digest | \`${IMAGE_DIGEST}\` |"
             echo ""
-            echo "## Validation Results"
+            echo "## Publication & Consumption"
             echo ""
             echo "| Stage | Result |"
             echo "|-------|--------|"
-            echo "| pnpm install | PASS |"
-            echo "| Scenario tests (\`pnpm run test:psis\`) | ${TEST_RESULT} |"
-            echo "| Application build (\`pnpm run build\`) | ${BUILD_RESULT} |"
-            echo "| Docker image build | ${DOCKER_BUILD_RESULT} |"
-            echo "| Docker container start | ${CONTAINER_RESULT} |"
-            echo "| Health endpoint (\`GET /api/healthz\`) | ${HEALTH_RESULT} |"
-            echo "| Frontend load (\`GET /\`) | ${FRONTEND_RESULT} |"
-            echo "| SPA route fallback (\`GET /track\`) | ${SPA_RESULT} |"
-            echo "| Docker Hub login validation | PASS |"
+            echo "| Docker Hub publish | ${PUBLISH_RESULT} |"
+            echo "| \`latest\` tag verified | ${LATEST_TAG_RESULT} |"
+            echo "| commit SHA tag verified | ${SHA_TAG_RESULT} |"
+            echo "| Published image pull | ${PULL_RESULT} |"
+            echo "| Published container start | ${PUBLISHED_CONTAINER} |"
             echo ""
-            echo "## Docker Image"
+            echo "## Published Image Smoke Tests"
             echo ""
-            echo "- **Image tag (CI only, not published):** \`${IMAGE_TAG}\`"
-            echo "- **Publication:** Deferred to ACI-003"
+            echo "| Check | Result |"
+            echo "|-------|--------|"
+            echo "| Health endpoint (\`GET /api/healthz\`) | ${PUBLISHED_HEALTH} |"
+            echo "| Frontend load (\`GET /\`) | ${PUBLISHED_FRONTEND} |"
+            echo "| SPA route fallback (\`GET /track\`) | ${PUBLISHED_SPA} |"
             echo ""
-            echo "## Smoke Test Details"
-            echo ""
-            echo "- **Health response:** \`{\"status\":\"ok\"}\` (HTTP 200)"
-            echo "- **Frontend marker:** \`<div id=\"root\">\` present on \`/\` and \`/track\`"
-            echo "- **Container startup time:** ${STARTUP_MS} ms (docker run → first successful \`/api/healthz\`)"
-            echo ""
-            echo "## Overall Status"
+            echo "## Overall PA Status"
             echo ""
             echo "**PASS**"
             echo ""
-            echo "All PSIS Production Artifact validation checks completed successfully."
-            echo "Docker Hub authentication succeeded. Image push is deferred to ACI-003."
-          } > docs/reports/PSIS_PA_CI_Validation_Report.md
+            echo "PSIS exists as a validated, independently consumable Production Artifact published to Docker Hub."
+            echo ""
+            echo "Pull command:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "docker pull ${IMAGE_NAME}:latest"
+            echo "docker run --rm -p 8080:8080 -e PORT=8080 -e NODE_ENV=production ${IMAGE_NAME}:latest"
+            echo "\`\`\`"
+          } > docs/reports/PSIS_PA_Validation_Report.md
 
-      - name: Upload validation report
+      - name: Upload PA validation report
         uses: actions/upload-artifact@v4
         with:
-          name: PSIS_PA_CI_Validation
-          path: docs/reports/PSIS_PA_CI_Validation_Report.md
+          name: PSIS_PA_Validation
+          path: docs/reports/PSIS_PA_Validation_Report.md
           retention-days: 30
