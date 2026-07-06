@@ -9,6 +9,7 @@
 export * from './baseState';
 export * from './createEntryInput';
 export * from './dashboardSummary';
+export * from './endSession201';
 export * from './entry';
 export * from './errorResponse';
 export * from './gameState';
@@ -21,3 +22,4 @@ export * from './outcomeType';
 export * from './resultCategory';
 export * from './resultOutcome';
 export * from './sequenceStat';
+export * from './session';

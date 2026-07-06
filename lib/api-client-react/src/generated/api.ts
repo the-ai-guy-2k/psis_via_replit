@@ -22,11 +22,13 @@ import type {
 import type {
   CreateEntryInput,
   DashboardSummary,
+  EndSession201,
   Entry,
   ErrorResponse,
   GameState,
   HealthStatus,
-  InningState
+  InningState,
+  Session
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -503,5 +505,152 @@ export const useStartNewGame = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getStartNewGameMutationOptions(options));
+    }
+
+export const getListSessionsUrl = () => {
+
+
+
+
+  return `/api/sessions`
+}
+
+/**
+ * @summary List saved pitching session summaries, most recently ended first (for future aggregate analysis; no aggregate UI yet)
+ */
+export const listSessions = async ( options?: RequestInit): Promise<Session[]> => {
+
+  return customFetch<Session[]>(getListSessionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSessionsQueryKey = () => {
+    return [
+    `/api/sessions`
+    ] as const;
+    }
+
+
+export const getListSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSessionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSessions>>> = ({ signal }) => listSessions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSessions>>>
+export type ListSessionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved pitching session summaries, most recently ended first (for future aggregate analysis; no aggregate UI yet)
+ */
+
+export function useListSessions<TData = Awaited<ReturnType<typeof listSessions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getEndSessionUrl = () => {
+
+
+
+
+  return `/api/sessions/end`
+}
+
+/**
+ * @summary End the active pitching session (requires at least 1 completed inning, not a fixed 9). Computes and persists a session summary from the current game's at-bats, then resets the Tracker's live tracking by bumping the game boundary (same mechanism as New Game) — no entries are deleted or mutated.
+ */
+export const endSession = async ( options?: RequestInit): Promise<EndSession201> => {
+
+  return customFetch<EndSession201>(getEndSessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getEndSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,void, TContext> => {
+
+const mutationKey = ['endSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof endSession>>, void> = () => {
+
+
+          return  endSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EndSessionMutationResult = NonNullable<Awaited<ReturnType<typeof endSession>>>
+
+    export type EndSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary End the active pitching session (requires at least 1 completed inning, not a fixed 9). Computes and persists a session summary from the current game's at-bats, then resets the Tracker's live tracking by bumping the game boundary (same mechanism as New Game) — no entries are deleted or mutated.
+ */
+export const useEndSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof endSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getEndSessionMutationOptions(options));
     }
 

@@ -33,8 +33,10 @@ export interface Entry {
   resultCategory: ResultCategory;
   /** Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately). */
   goodCount: number;
-  /** Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run hit is still 1 unit), 0 otherwise. */
+  /** Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored/displayed, not itself subtracted from delta. */
   badCount: number;
+  /** Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed. */
+  rbi?: number;
   strikeoutCount: number;
   /** Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed/stored separately but not subtracted. */
   delta: number;

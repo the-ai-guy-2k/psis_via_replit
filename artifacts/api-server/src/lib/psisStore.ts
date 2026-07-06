@@ -21,8 +21,13 @@ export {
   computeInningState,
   computeLatestInningState,
   resolveInningForNewAtBat,
+  computeEabrUnits,
+  computeRbi,
+  computeSessionSummary,
   type InningState,
+  type Session,
 } from "@workspace/psis-game-logic";
+import type { Session } from "@workspace/psis-game-logic";
 
 const workspaceRoot = process.cwd().endsWith(path.join("artifacts", "api-server"))
   ? path.resolve(process.cwd(), "../..")
@@ -31,6 +36,7 @@ const workspaceRoot = process.cwd().endsWith(path.join("artifacts", "api-server"
 const dataDir = path.resolve(workspaceRoot, "artifacts/api-server/data");
 const dataFile = path.resolve(dataDir, "psis_entries.json");
 const gameStateFile = path.resolve(dataDir, "psis_game_state.json");
+const sessionsFile = path.resolve(dataDir, "psis_sessions.json");
 
 interface GameStateFile {
   currentGameId: number;
@@ -116,4 +122,48 @@ export async function appendEntry(entry: Entry): Promise<Entry> {
   entries.push(entry);
   await writeEntries(entries);
   return entry;
+}
+
+async function ensureSessionsFile(): Promise<void> {
+  await fs.mkdir(dataDir, { recursive: true });
+  try {
+    await fs.access(sessionsFile);
+  } catch {
+    await fs.writeFile(sessionsFile, "[]\n", "utf-8");
+  }
+}
+
+/**
+ * Saved "End Session" summaries, persisted for future cross-session
+ * aggregate analysis (no aggregate UI built yet — see PSIS ACI live-testing
+ * feedback patch). Sessions are append-only, most-recent-first on read, and
+ * never mutate `psis_entries.json` — ending a session only bumps the game
+ * boundary via startNewGame() so the Tracker's live view resets.
+ */
+export async function listSessions(): Promise<Session[]> {
+  await ensureSessionsFile();
+  const raw = await fs.readFile(sessionsFile, "utf-8");
+  try {
+    const parsed = JSON.parse(raw);
+    const sessions = Array.isArray(parsed) ? (parsed as Session[]) : [];
+    return [...sessions].sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime());
+  } catch (err) {
+    logger.error({ err }, "Failed to parse psis_sessions.json, treating as empty");
+    return [];
+  }
+}
+
+export async function appendSession(session: Session): Promise<Session> {
+  await ensureSessionsFile();
+  const raw = await fs.readFile(sessionsFile, "utf-8");
+  let sessions: Session[] = [];
+  try {
+    const parsed = JSON.parse(raw);
+    sessions = Array.isArray(parsed) ? (parsed as Session[]) : [];
+  } catch (err) {
+    logger.error({ err }, "Failed to parse psis_sessions.json, starting fresh");
+  }
+  sessions.push(session);
+  await fs.writeFile(sessionsFile, JSON.stringify(sessions, null, 2) + "\n", "utf-8");
+  return session;
 }

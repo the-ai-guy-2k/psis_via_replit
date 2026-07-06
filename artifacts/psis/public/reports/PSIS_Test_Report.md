@@ -1,11 +1,11 @@
 # PSIS Test Report
 
-Generated: 2026-07-06T01:54:58.895Z
+Generated: 2026-07-06T05:13:53.519Z
 
 **Overall status: PASS**
 
-- Scenarios: 10/10 passed
-- Assertions: 63/63 passed
+- Scenarios: 14/14 passed
+- Assertions: 96/96 passed
 
 This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports and exercises the real, unduplicated PSIS game-logic functions from `@workspace/psis-game-logic` (the same module the live API server uses).
 
@@ -23,6 +23,10 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 | Inning Delta | Inning Delta = Good Units - Bad Units (Official EABR Delta) | PASS | 5/5 |
 | Completed Innings | Completed Innings Auto-Advance To The Next Inning | PASS | 5/5 |
 | Reset Game State | New Game Reset Scopes The Live View By gameId | PASS | 8/8 |
+| RBI | RBI Calculation & Bad-Unit Penalty: Home Runs | PASS | 8/8 |
+| RBI | RBI Calculation & Bad-Unit Penalty: Bases-Loaded Walk & 2-Run Double | PASS | 8/8 |
+| Session | End Session Is Valid After 7 Completed Innings (Not A Fixed 9) | PASS | 9/9 |
+| Session | End Session Is Valid Before 9 Innings, Including A Partial Final Inning | PASS | 8/8 |
 
 ## Assertion Detail
 
@@ -95,10 +99,10 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 ### Inning Delta = Good Units - Bad Units (Official EABR Delta) (Inning Delta) — PASS
 
 - [PASS] 2nd at-bat's single scores the runner on 3rd
-- [PASS] per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored
+- [PASS] per-entry delta = good - bad; bad = baseBadCount(1) + rbi(1) = 2, so delta = 0 - 2 = -2
 - [PASS] per-entry delta for a good outcome is +1
 - [PASS] computeInningState's inningDelta equals sum(entry.delta) over the inning
-- [PASS] inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)
+- [PASS] inningDelta = Good Units - Bad Units, RBI penalty included in bad units (-1 + -2 + 1 = -2 total)
 
 ### Completed Innings Auto-Advance To The Next Inning (Completed Innings) — PASS
 
@@ -118,4 +122,49 @@ This report is produced by `scripts/src/test-psis-scenarios.ts`, which imports a
 - [PASS] old game's entries are NOT scoped to the new gameId
 - [PASS] an entry with no gameId is treated as belonging to game 1 (backward compatibility)
 - [PASS] an entry with no gameId is NOT treated as belonging to a later game
+
+### RBI Calculation & Bad-Unit Penalty: Home Runs (RBI) — PASS
+
+- [PASS] solo HR with empty bases drives in 1 run
+- [PASS] solo HR RBI equals runsScored (1)
+- [PASS] solo HR badCount = baseBadCount(1) + rbi(1) = 2
+- [PASS] solo HR delta = goodCount(0) - badCount(2) = -2
+- [PASS] bases-loaded HR scores all 4 runners (3 + batter)
+- [PASS] bases-loaded HR RBI equals runsScored (4)
+- [PASS] bases-loaded HR badCount = baseBadCount(1) + rbi(4) = 5
+- [PASS] bases-loaded HR delta = goodCount(0) - badCount(5) = -5
+
+### RBI Calculation & Bad-Unit Penalty: Bases-Loaded Walk & 2-Run Double (RBI) — PASS
+
+- [PASS] bases-loaded walk forces in exactly 1 run
+- [PASS] bases-loaded walk RBI equals runsScored (1)
+- [PASS] bases-loaded walk badCount = baseBadCount(1) + rbi(1) = 2
+- [PASS] bases-loaded walk delta = goodCount(0) - badCount(2) = -2
+- [PASS] double advances both runners home (2 runs)
+- [PASS] 2-run double RBI equals runsScored (2)
+- [PASS] 2-run double badCount = baseBadCount(1) + rbi(2) = 3
+- [PASS] 2-run double delta = goodCount(0) - badCount(3) = -3
+
+### End Session Is Valid After 7 Completed Innings (Not A Fixed 9) (Session) — PASS
+
+- [PASS] 7 innings completed
+- [PASS] no partial inning left in progress (exactly 21 outs, no 8th inning started)
+- [PASS] session is eligible to end (inningsCompleted >= 1)
+- [PASS] totalOutsRecorded is 21 (7 x 3)
+- [PASS] totalGoodUnits is 21 (21 strikeouts, no LOB since bases always empty)
+- [PASS] totalBadUnits is 0 (no offense outcomes)
+- [PASS] sessionEabrFraction is null when totalBadUnits is 0
+- [PASS] sessionEabrDelta = 21 - 0 = 21
+- [PASS] inningSummaries has exactly 7 entries, all completed
+
+### End Session Is Valid Before 9 Innings, Including A Partial Final Inning (Session) — PASS
+
+- [PASS] only 1 inning is fully completed
+- [PASS] session is eligible to end after just 1 completed inning (not 9)
+- [PASS] the in-progress 2nd inning is reported as currentInning
+- [PASS] totalOutsRecorded is 4 (3 complete + 1 partial)
+- [PASS] partial inning's at-bat still counted in totalGoodUnits
+- [PASS] inningSummaries includes both the completed inning and the in-progress one
+- [PASS] 2nd inningSummary is not completed
+- [PASS] a game with zero at-bats has 0 completed innings (route should reject ending it)
 

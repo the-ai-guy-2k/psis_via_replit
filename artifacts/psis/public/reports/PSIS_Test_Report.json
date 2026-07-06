@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-07-06T01:54:58.895Z",
+  "generatedAt": "2026-07-06T05:13:53.519Z",
   "overallStatus": "PASS",
   "summary": {
-    "totalScenarios": 10,
-    "passed": 10,
+    "totalScenarios": 14,
+    "passed": 14,
     "failed": 0,
-    "totalAssertions": 63,
-    "passedAssertions": 63,
+    "totalAssertions": 96,
+    "passedAssertions": 96,
     "failedAssertions": 0
   },
   "scenarios": [
@@ -421,9 +421,9 @@
           "pass": true
         },
         {
-          "description": "per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored",
-          "expected": -1,
-          "actual": -1,
+          "description": "per-entry delta = good - bad; bad = baseBadCount(1) + rbi(1) = 2, so delta = 0 - 2 = -2",
+          "expected": -2,
+          "actual": -2,
           "pass": true
         },
         {
@@ -434,14 +434,14 @@
         },
         {
           "description": "computeInningState's inningDelta equals sum(entry.delta) over the inning",
-          "expected": -1,
-          "actual": -1,
+          "expected": -2,
+          "actual": -2,
           "pass": true
         },
         {
-          "description": "inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)",
-          "expected": -1,
-          "actual": -1,
+          "description": "inningDelta = Good Units - Bad Units, RBI penalty included in bad units (-1 + -2 + 1 = -2 total)",
+          "expected": -2,
+          "actual": -2,
           "pass": true
         }
       ]
@@ -596,6 +596,234 @@
           "description": "an entry with no gameId is NOT treated as belonging to a later game",
           "expected": false,
           "actual": false,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "rbi-home-runs",
+      "name": "RBI Calculation & Bad-Unit Penalty: Home Runs",
+      "category": "RBI",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "solo HR with empty bases drives in 1 run",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "solo HR RBI equals runsScored (1)",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "solo HR badCount = baseBadCount(1) + rbi(1) = 2",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "solo HR delta = goodCount(0) - badCount(2) = -2",
+          "expected": -2,
+          "actual": -2,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded HR scores all 4 runners (3 + batter)",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded HR RBI equals runsScored (4)",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded HR badCount = baseBadCount(1) + rbi(4) = 5",
+          "expected": 5,
+          "actual": 5,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded HR delta = goodCount(0) - badCount(5) = -5",
+          "expected": -5,
+          "actual": -5,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "rbi-walk-and-double",
+      "name": "RBI Calculation & Bad-Unit Penalty: Bases-Loaded Walk & 2-Run Double",
+      "category": "RBI",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "bases-loaded walk forces in exactly 1 run",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded walk RBI equals runsScored (1)",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded walk badCount = baseBadCount(1) + rbi(1) = 2",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "bases-loaded walk delta = goodCount(0) - badCount(2) = -2",
+          "expected": -2,
+          "actual": -2,
+          "pass": true
+        },
+        {
+          "description": "double advances both runners home (2 runs)",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "2-run double RBI equals runsScored (2)",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "2-run double badCount = baseBadCount(1) + rbi(2) = 3",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "description": "2-run double delta = goodCount(0) - badCount(3) = -3",
+          "expected": -3,
+          "actual": -3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "end-session-after-7-innings",
+      "name": "End Session Is Valid After 7 Completed Innings (Not A Fixed 9)",
+      "category": "Session",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "7 innings completed",
+          "expected": 7,
+          "actual": 7,
+          "pass": true
+        },
+        {
+          "description": "no partial inning left in progress (exactly 21 outs, no 8th inning started)",
+          "pass": true
+        },
+        {
+          "description": "session is eligible to end (inningsCompleted >= 1)",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "totalOutsRecorded is 21 (7 x 3)",
+          "expected": 21,
+          "actual": 21,
+          "pass": true
+        },
+        {
+          "description": "totalGoodUnits is 21 (21 strikeouts, no LOB since bases always empty)",
+          "expected": 21,
+          "actual": 21,
+          "pass": true
+        },
+        {
+          "description": "totalBadUnits is 0 (no offense outcomes)",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "description": "sessionEabrFraction is null when totalBadUnits is 0",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "description": "sessionEabrDelta = 21 - 0 = 21",
+          "expected": 21,
+          "actual": 21,
+          "pass": true
+        },
+        {
+          "description": "inningSummaries has exactly 7 entries, all completed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "end-session-before-9-innings",
+      "name": "End Session Is Valid Before 9 Innings, Including A Partial Final Inning",
+      "category": "Session",
+      "status": "PASS",
+      "assertions": [
+        {
+          "description": "only 1 inning is fully completed",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "description": "session is eligible to end after just 1 completed inning (not 9)",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "the in-progress 2nd inning is reported as currentInning",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "totalOutsRecorded is 4 (3 complete + 1 partial)",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "description": "partial inning's at-bat still counted in totalGoodUnits",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "description": "inningSummaries includes both the completed inning and the in-progress one",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "description": "2nd inningSummary is not completed",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "description": "a game with zero at-bats has 0 completed innings (route should reject ending it)",
+          "expected": 0,
+          "actual": 0,
           "pass": true
         }
       ]

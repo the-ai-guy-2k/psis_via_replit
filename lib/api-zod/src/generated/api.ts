@@ -39,7 +39,8 @@ export const ListEntriesResponseItem = zod.object({
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
-  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 unit), 0 otherwise.'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
   "strikeoutCount": zod.number(),
   "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
@@ -88,7 +89,8 @@ export const CreateEntryResponse = zod.object({
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
-  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 unit), 0 otherwise.'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
   "strikeoutCount": zod.number(),
   "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
@@ -121,7 +123,8 @@ export const GetDashboardResponse = zod.object({
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
-  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 unit), 0 otherwise.'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
   "strikeoutCount": zod.number(),
   "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
@@ -187,7 +190,8 @@ export const GetCurrentInningResponse = zod.object({
   "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
   "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
   "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
-  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 unit), 0 otherwise.'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
   "strikeoutCount": zod.number(),
   "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
@@ -204,5 +208,209 @@ export const GetCurrentInningResponse = zod.object({
 export const StartNewGameResponse = zod.object({
   "gameId": zod.number()
 }).describe('Identifies the currently active game. Bumped by \/games\/new; used to scope the Tracker\'s live view to only the current game\'s entries.')
+
+
+/**
+ * @summary List saved pitching session summaries, most recently ended first (for future aggregate analysis; no aggregate UI yet)
+ */
+export const ListSessionsResponseItem = zod.object({
+  "sessionId": zod.string(),
+  "endedAt": zod.string(),
+  "gameId": zod.number().describe('The game boundary this session\'s at-bats belonged to.'),
+  "inningsCompleted": zod.number().describe('Count of fully-completed (3-out) innings in this session. Sessions can be ended after as few as 1, not a fixed 9.'),
+  "currentInning": zod.number().optional().describe('The inning number still in progress (not yet 3 outs) when the session ended, if any.'),
+  "totalOutsRecorded": zod.number(),
+  "totalGoodUnits": zod.number(),
+  "totalBadUnits": zod.number(),
+  "sessionEabrFraction": zod.number().nullable().describe('Good units \/ Bad units for the whole session. null when totalBadUnits is 0.'),
+  "sessionEabrDelta": zod.number().describe('totalGoodUnits - totalBadUnits for the whole session.'),
+  "totalHitsAllowed": zod.number().describe('Singles allowed.'),
+  "totalWalksAllowed": zod.number(),
+  "totalHomeRunsAllowed": zod.number(),
+  "totalExtraBaseHitsAllowed": zod.number().describe('Doubles + triples allowed.'),
+  "totalRBIAllowed": zod.number(),
+  "totalRunsAllowed": zod.number(),
+  "totalStrikeouts": zod.number(),
+  "totalFlyOuts": zod.number(),
+  "totalGroundOuts": zod.number(),
+  "totalLOB": zod.number(),
+  "inningSummaries": zod.array(zod.object({
+  "inningNumber": zod.number(),
+  "gameId": zod.number().describe('The current game boundary this inning state was computed against (see GameState\/New Game).'),
+  "outs": zod.number().describe('Defensive outs recorded so far in this inning (0-3)'),
+  "completed": zod.boolean().describe('True once outs reach 3'),
+  "totalAtBats": zod.number(),
+  "goodCount": zod.number().describe('Official EABR good units summed across this inning\'s at-bats (see Entry.goodCount; already includes any players-left-on-base units).'),
+  "badCount": zod.number().describe('Official EABR bad units summed across this inning\'s at-bats (see Entry.badCount).'),
+  "inningDelta": zod.number().describe('Official EABR Delta for the inning: sum(entry.delta) = Good Units - Bad Units. Runs scored are not subtracted.'),
+  "runsScored": zod.number().describe('Total runs scored across this inning\'s at-bats, summed from each at-bat\'s computed runsScored. Tracked for display only — no longer subtracted from inningDelta.'),
+  "playersLeftOnBase": zod.number().describe('Runners left on base, auto-calculated from base occupancy once the inning completes'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).describe('Current runner occupancy for this inning (as of the most recent at-bat)'),
+  "atBats": zod.array(zod.object({
+  "id": zod.string(),
+  "createdAt": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
+  "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
+  "notes": zod.string().optional()
+}))
+})),
+  "atBats": zod.array(zod.object({
+  "id": zod.string(),
+  "createdAt": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
+  "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
+  "notes": zod.string().optional()
+}))
+}).describe('A persisted \"End Session\" summary, saved for future cross-session aggregate analysis (no aggregate UI built yet). Computed from every at-bat belonging to the game boundary that was active when the session was ended; ending a session never deletes or mutates `Entry` records.')
+export const ListSessionsResponse = zod.array(ListSessionsResponseItem)
+
+
+/**
+ * @summary End the active pitching session (requires at least 1 completed inning, not a fixed 9). Computes and persists a session summary from the current game's at-bats, then resets the Tracker's live tracking by bumping the game boundary (same mechanism as New Game) — no entries are deleted or mutated.
+ */
+export const EndSessionResponse = zod.object({
+  "session": zod.object({
+  "sessionId": zod.string(),
+  "endedAt": zod.string(),
+  "gameId": zod.number().describe('The game boundary this session\'s at-bats belonged to.'),
+  "inningsCompleted": zod.number().describe('Count of fully-completed (3-out) innings in this session. Sessions can be ended after as few as 1, not a fixed 9.'),
+  "currentInning": zod.number().optional().describe('The inning number still in progress (not yet 3 outs) when the session ended, if any.'),
+  "totalOutsRecorded": zod.number(),
+  "totalGoodUnits": zod.number(),
+  "totalBadUnits": zod.number(),
+  "sessionEabrFraction": zod.number().nullable().describe('Good units \/ Bad units for the whole session. null when totalBadUnits is 0.'),
+  "sessionEabrDelta": zod.number().describe('totalGoodUnits - totalBadUnits for the whole session.'),
+  "totalHitsAllowed": zod.number().describe('Singles allowed.'),
+  "totalWalksAllowed": zod.number(),
+  "totalHomeRunsAllowed": zod.number(),
+  "totalExtraBaseHitsAllowed": zod.number().describe('Doubles + triples allowed.'),
+  "totalRBIAllowed": zod.number(),
+  "totalRunsAllowed": zod.number(),
+  "totalStrikeouts": zod.number(),
+  "totalFlyOuts": zod.number(),
+  "totalGroundOuts": zod.number(),
+  "totalLOB": zod.number(),
+  "inningSummaries": zod.array(zod.object({
+  "inningNumber": zod.number(),
+  "gameId": zod.number().describe('The current game boundary this inning state was computed against (see GameState\/New Game).'),
+  "outs": zod.number().describe('Defensive outs recorded so far in this inning (0-3)'),
+  "completed": zod.boolean().describe('True once outs reach 3'),
+  "totalAtBats": zod.number(),
+  "goodCount": zod.number().describe('Official EABR good units summed across this inning\'s at-bats (see Entry.goodCount; already includes any players-left-on-base units).'),
+  "badCount": zod.number().describe('Official EABR bad units summed across this inning\'s at-bats (see Entry.badCount).'),
+  "inningDelta": zod.number().describe('Official EABR Delta for the inning: sum(entry.delta) = Good Units - Bad Units. Runs scored are not subtracted.'),
+  "runsScored": zod.number().describe('Total runs scored across this inning\'s at-bats, summed from each at-bat\'s computed runsScored. Tracked for display only — no longer subtracted from inningDelta.'),
+  "playersLeftOnBase": zod.number().describe('Runners left on base, auto-calculated from base occupancy once the inning completes'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).describe('Current runner occupancy for this inning (as of the most recent at-bat)'),
+  "atBats": zod.array(zod.object({
+  "id": zod.string(),
+  "createdAt": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
+  "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
+  "notes": zod.string().optional()
+}))
+})),
+  "atBats": zod.array(zod.object({
+  "id": zod.string(),
+  "createdAt": zod.string(),
+  "pitcherHandedness": zod.enum(['L', 'R']).optional(),
+  "batterHandedness": zod.enum(['L', 'R']).optional(),
+  "pitchSequence": zod.string().optional(),
+  "outcomeCategory": zod.enum(['defense', 'offense']).optional().describe('Top-level branch of the at-bat outcome wizard'),
+  "outcomeType": zod.enum(['strikeout', 'fly_out', 'ground_out', 'infield_out', 'infield_catch', 'double_play', 'triple_play', 'run_scored', 'hit', 'walk', 'home_run', 'extra_base_hit']).optional().describe('Specific outcome selected within a defense or offense branch. infield_catch, double_play, triple_play, home_run, and extra_base_hit are legacy top-level values retained only so pre-EABR-flow entries keep validating; the progressive click flow now produces double_play and triple_play as an outcomeDetail of ground_out, and home_run as an outcomeDetail of hit.'),
+  "outcomeDetail": zod.enum(['single', 'double', 'triple', 'home_run', 'infield', 'outfield', 'single_play', 'double_play', 'triple_play']).optional().describe('Follow-up detail for outcome types that branch further: fly_out (catch location), ground_out (play result), hit (hit type), and the legacy extra_base_hit (double\/triple only).'),
+  "runsScored": zod.number().optional().describe('Runs scored on this at-bat. Computed server-side from base-state advancement for hit\/walk outcomes (0 when no runner crosses home), or supplied manually for the legacy run_scored outcome type. Absent on entries created before this field existed.'),
+  "baseState": zod.object({
+  "firstBase": zod.boolean(),
+  "secondBase": zod.boolean(),
+  "thirdBase": zod.boolean()
+}).optional().describe('Runner occupancy immediately after this at-bat resolves. Absent on entries created before base-state tracking existed.'),
+  "playersLeftOnBase": zod.number().optional().describe('Runners left on base for the inning this entry completed, auto-calculated from base occupancy. Only ever set on the at-bat that recorded the inning\'s 3rd out; other at-bats never carry this field.'),
+  "result": zod.enum(['strikeout', 'ground_out', 'fly_out', 'pop_out', 'double_play', 'weak_contact', 'hit', 'walk', 'home_run', 'hard_contact', 'run_scored', 'pressure_error']).optional().describe('Legacy flat outcome value, only present on entries created before the outcome wizard'),
+  "resultCategory": zod.enum(['good', 'bad']).describe('Whether an entry favored the pitcher (good) or the batter (bad)'),
+  "goodCount": zod.number().describe('Official EABR good units for this at-bat. 1 unit for a good outcome (never scaled by outcomeDetail, e.g. a double_play or triple_play ground_out is still 1 unit), plus 1 additional unit per player left on base if this at-bat completed the inning (playersLeftOnBase folded in here, not tracked separately).'),
+  "badCount": zod.number().describe('Official EABR bad units for this at-bat. 1 base unit for a bad outcome (never scaled by outcomeDetail, e.g. a double\/triple\/home_run hit is still 1 base unit) PLUS 1 additional bad unit per RBI driven in on this at-bat (badCount = baseBadCount + rbi). This does not double-subtract runsScored — runsScored is only ever stored\/displayed, not itself subtracted from delta.'),
+  "rbi": zod.number().optional().describe('Runs Batted In on this at-bat — the runs driven in via base-state advancement (equal to runsScored for hit\/walk outcomes; always 0 for defense outcomes since outs never advance runners; forced to 0 for the legacy manual run_scored override). Each RBI adds 1 extra EABR bad unit (see badCount). Absent on entries created before this field existed.'),
+  "strikeoutCount": zod.number(),
+  "delta": zod.number().describe('Official EABR Delta for this at-bat: goodCount - badCount. runsScored is computed\/stored separately but not subtracted.'),
+  "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
+  "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
+  "notes": zod.string().optional()
+}))
+}).describe('A persisted \"End Session\" summary, saved for future cross-session aggregate analysis (no aggregate UI built yet). Computed from every at-bat belonging to the game boundary that was active when the session was ended; ending a session never deletes or mutates `Entry` records.'),
+  "newGameId": zod.number().describe('The game boundary bumped to as part of ending this session — matches the value POST \/games\/new would have returned.')
+})
 
 

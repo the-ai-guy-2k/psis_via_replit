@@ -18,6 +18,8 @@ tags:
     description: Inning-by-inning at-bat tracking
   - name: games
     description: Game lifecycle (New Game / Reset Game)
+  - name: sessions
+    description: Pitching session lifecycle (End Session) and saved session history
 paths:
   /healthz:
     get:
@@ -109,6 +111,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameState"
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List saved pitching session summaries, most recently ended first (for future aggregate analysis; no aggregate UI yet)
+      responses:
+        "200":
+          description: List of saved sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+  /sessions/end:
+    post:
+      operationId: endSession
+      tags: [sessions]
+      summary: >-
+        End the active pitching session (requires at least 1 completed
+        inning, not a fixed 9). Computes and persists a session summary from
+        the current game's at-bats, then resets the Tracker's live tracking
+        by bumping the game boundary (same mechanism as New Game) — no
+        entries are deleted or mutated.
+      responses:
+        "201":
+          description: Session ended and saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/Session"
+                  newGameId:
+                    type: integer
+                    description: The game boundary bumped to as part of ending this session — matches the value POST /games/new would have returned.
+                required:
+                  - session
+                  - newGameId
+        "400":
+          description: Session must include at least 1 completed inning
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -290,9 +338,21 @@ components:
         badCount:
           type: integer
           description: >-
-            Official EABR bad units for this at-bat. 1 unit for a bad
+            Official EABR bad units for this at-bat. 1 base unit for a bad
             outcome (never scaled by outcomeDetail, e.g. a double/triple/home_run
-            hit is still 1 unit), 0 otherwise.
+            hit is still 1 base unit) PLUS 1 additional bad unit per RBI
+            driven in on this at-bat (badCount = baseBadCount + rbi). This
+            does not double-subtract runsScored — runsScored is only ever
+            stored/displayed, not itself subtracted from delta.
+        rbi:
+          type: integer
+          description: >-
+            Runs Batted In on this at-bat — the runs driven in via base-state
+            advancement (equal to runsScored for hit/walk outcomes; always 0
+            for defense outcomes since outs never advance runners; forced to
+            0 for the legacy manual run_scored override). Each RBI adds 1
+            extra EABR bad unit (see badCount). Absent on entries created
+            before this field existed.
         strikeoutCount:
           type: integer
         delta:
@@ -424,3 +484,90 @@ components:
         - totalStrikeouts
         - averageDelta
         - entryCount
+    Session:
+      type: object
+      description: >-
+        A persisted "End Session" summary, saved for future cross-session
+        aggregate analysis (no aggregate UI built yet). Computed from every
+        at-bat belonging to the game boundary that was active when the
+        session was ended; ending a session never deletes or mutates
+        `Entry` records.
+      properties:
+        sessionId:
+          type: string
+        endedAt:
+          type: string
+        gameId:
+          type: integer
+          description: The game boundary this session's at-bats belonged to.
+        inningsCompleted:
+          type: integer
+          description: Count of fully-completed (3-out) innings in this session. Sessions can be ended after as few as 1, not a fixed 9.
+        currentInning:
+          type: integer
+          description: The inning number still in progress (not yet 3 outs) when the session ended, if any.
+        totalOutsRecorded:
+          type: integer
+        totalGoodUnits:
+          type: integer
+        totalBadUnits:
+          type: integer
+        sessionEabrFraction:
+          type: number
+          nullable: true
+          description: Good units / Bad units for the whole session. null when totalBadUnits is 0.
+        sessionEabrDelta:
+          type: integer
+          description: totalGoodUnits - totalBadUnits for the whole session.
+        totalHitsAllowed:
+          type: integer
+          description: Singles allowed.
+        totalWalksAllowed:
+          type: integer
+        totalHomeRunsAllowed:
+          type: integer
+        totalExtraBaseHitsAllowed:
+          type: integer
+          description: Doubles + triples allowed.
+        totalRBIAllowed:
+          type: integer
+        totalRunsAllowed:
+          type: integer
+        totalStrikeouts:
+          type: integer
+        totalFlyOuts:
+          type: integer
+        totalGroundOuts:
+          type: integer
+        totalLOB:
+          type: integer
+        inningSummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/InningState"
+        atBats:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+      required:
+        - sessionId
+        - endedAt
+        - gameId
+        - inningsCompleted
+        - totalOutsRecorded
+        - totalGoodUnits
+        - totalBadUnits
+        - sessionEabrFraction
+        - sessionEabrDelta
+        - totalHitsAllowed
+        - totalWalksAllowed
+        - totalHomeRunsAllowed
+        - totalExtraBaseHitsAllowed
+        - totalRBIAllowed
+        - totalRunsAllowed
+        - totalStrikeouts
+        - totalFlyOuts
+        - totalGroundOuts
+        - totalLOB
+        - inningSummaries
+        - atBats

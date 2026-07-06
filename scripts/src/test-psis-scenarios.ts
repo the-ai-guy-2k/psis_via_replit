@@ -25,6 +25,9 @@ import {
   resolveInningForNewAtBat,
   isEntryInGame,
   emptyBaseState,
+  computeEabrUnits,
+  computeRbi,
+  computeSessionSummary,
 } from "@workspace/psis-game-logic";
 import type { Entry, OutcomeCategory, OutcomeType, OutcomeDetail } from "@workspace/api-zod";
 
@@ -69,10 +72,6 @@ function simulateAtBat(entries: Entry[], gameId: number, input: SimAtBatInput): 
     baseStateBefore,
   );
   const resultCategory = resultCategoryForOutcomeCategory(input.outcomeCategory);
-  // Official EABR unit rule: each qualifying event is worth exactly 1 unit
-  // regardless of play detail (mirrors artifacts/api-server/src/routes/entries.ts).
-  const baseGoodCount = resultCategory === "good" ? 1 : 0;
-  const badCount = resultCategory === "bad" ? 1 : 0;
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
 
   const rawOuts = rawOutsForOutcome(input.outcomeCategory, input.outcomeType, input.outcomeDetail);
@@ -82,12 +81,16 @@ function simulateAtBat(entries: Entry[], gameId: number, input: SimAtBatInput): 
     ? [baseStateAfter.firstBase, baseStateAfter.secondBase, baseStateAfter.thirdBase].filter(Boolean).length
     : undefined;
 
-  // Official EABR rule: each player left on base at inning-completion is
-  // worth 1 additional good unit, folded into this completing entry's
-  // goodCount. Official EABR Delta = Good Units - Bad Units (runsScored is
-  // still computed/stored but no longer subtracted).
-  const goodCount = baseGoodCount + (playersLeftOnBase ?? 0);
-  const delta = goodCount - badCount;
+  // Mirrors artifacts/api-server/src/routes/entries.ts: RBI = runsScored
+  // (test harness never simulates the legacy run_scored override), and
+  // badCount = baseBadCount + rbi via the shared computeEabrUnits rule.
+  const rbi = computeRbi(runsScored, false);
+  const { goodCount, badCount, delta } = computeEabrUnits({
+    resultCategory,
+    isLegacyManualOverride: false,
+    playersLeftOnBase,
+    rbi,
+  });
 
   const entry: Entry = {
     id: nextId(),
@@ -101,6 +104,7 @@ function simulateAtBat(entries: Entry[], gameId: number, input: SimAtBatInput): 
     strikeoutCount,
     delta,
     runsScored,
+    rbi,
     baseState: baseStateAfter,
     inningNumber,
     gameId,
@@ -308,9 +312,9 @@ runScenario("inning-delta-formula", "Inning Delta = Good Units - Bad Units (Offi
   const gameId = 7;
   const entries: Entry[] = [];
   const e1 = simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "triple" }); // bad, 0 runs (bases were empty)
-  const e2 = simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "single" }); // bad, scores the runner on 3rd -> 1 run
+  const e2 = simulateAtBat(entries, gameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "single" }); // bad, scores the runner on 3rd -> 1 run -> 1 RBI
   check("2nd at-bat's single scores the runner on 3rd", 1, e2.runsScored);
-  check("per-entry delta = good - bad; runs scored are NOT subtracted (0 - 1 = -1) even though a run scored", -1, e2.delta);
+  check("per-entry delta = good - bad; bad = baseBadCount(1) + rbi(1) = 2, so delta = 0 - 2 = -2", -2, e2.delta);
 
   const e3 = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" }); // good, no LOB yet
   check("per-entry delta for a good outcome is +1", 1, e3.delta);
@@ -318,7 +322,7 @@ runScenario("inning-delta-formula", "Inning Delta = Good Units - Bad Units (Offi
   const inning = computeInningState(entries, 1, gameId);
   const expectedInningDelta = e1.delta + e2.delta + e3.delta;
   check("computeInningState's inningDelta equals sum(entry.delta) over the inning", expectedInningDelta, inning.inningDelta);
-  check("inningDelta = Good Units - Bad Units, runs scored excluded from the formula (-1 + -1 + 1 = -1 total)", -1, inning.inningDelta);
+  check("inningDelta = Good Units - Bad Units, RBI penalty included in bad units (-1 + -2 + 1 = -2 total)", -2, inning.inningDelta);
 });
 
 // ---------------------------------------------------------------------------
@@ -388,6 +392,116 @@ runScenario("reset-game-state-gameid-boundary", "New Game Reset Scopes The Live 
   const legacyEntry: Pick<Entry, "gameId"> = {};
   check("an entry with no gameId is treated as belonging to game 1 (backward compatibility)", true, isEntryInGame(legacyEntry, 1));
   check("an entry with no gameId is NOT treated as belonging to a later game", false, isEntryInGame(legacyEntry, 2));
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 9: RBI + EABR bad-unit formula (solo HR, bases-loaded HR)
+// ---------------------------------------------------------------------------
+
+runScenario("rbi-home-runs", "RBI Calculation & Bad-Unit Penalty: Home Runs", "RBI", (check) => {
+  // Solo home run: bases empty, batter alone scores -> 1 RBI.
+  const soloGameId = 100;
+  const soloEntries: Entry[] = [];
+  const soloHr = simulateAtBat(soloEntries, soloGameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "home_run" });
+  check("solo HR with empty bases drives in 1 run", 1, soloHr.runsScored);
+  check("solo HR RBI equals runsScored (1)", 1, soloHr.rbi);
+  check("solo HR badCount = baseBadCount(1) + rbi(1) = 2", 2, soloHr.badCount);
+  check("solo HR delta = goodCount(0) - badCount(2) = -2", -2, soloHr.delta);
+
+  // Bases-loaded home run: 3 runners + batter all score -> 4 RBI.
+  const loadedGameId = 101;
+  const loadedEntries: Entry[] = [];
+  simulateAtBat(loadedEntries, loadedGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  simulateAtBat(loadedEntries, loadedGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  simulateAtBat(loadedEntries, loadedGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  const loadedHr = simulateAtBat(loadedEntries, loadedGameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "home_run" });
+  check("bases-loaded HR scores all 4 runners (3 + batter)", 4, loadedHr.runsScored);
+  check("bases-loaded HR RBI equals runsScored (4)", 4, loadedHr.rbi);
+  check("bases-loaded HR badCount = baseBadCount(1) + rbi(4) = 5", 5, loadedHr.badCount);
+  check("bases-loaded HR delta = goodCount(0) - badCount(5) = -5", -5, loadedHr.delta);
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 10: RBI + EABR bad-unit formula (bases-loaded walk, double scoring 2)
+// ---------------------------------------------------------------------------
+
+runScenario("rbi-walk-and-double", "RBI Calculation & Bad-Unit Penalty: Bases-Loaded Walk & 2-Run Double", "RBI", (check) => {
+  // Bases-loaded walk forces exactly 1 run home -> 1 RBI.
+  const walkGameId = 102;
+  const walkEntries: Entry[] = [];
+  simulateAtBat(walkEntries, walkGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  simulateAtBat(walkEntries, walkGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  simulateAtBat(walkEntries, walkGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  const loadedWalk = simulateAtBat(walkEntries, walkGameId, { outcomeCategory: "offense", outcomeType: "walk" });
+  check("bases-loaded walk forces in exactly 1 run", 1, loadedWalk.runsScored);
+  check("bases-loaded walk RBI equals runsScored (1)", 1, loadedWalk.rbi);
+  check("bases-loaded walk badCount = baseBadCount(1) + rbi(1) = 2", 2, loadedWalk.badCount);
+  check("bases-loaded walk delta = goodCount(0) - badCount(2) = -2", -2, loadedWalk.delta);
+
+  // Double with runners on 2nd/3rd scores both -> 2 RBI.
+  const doubleGameId = 103;
+  const doubleEntries: Entry[] = [];
+  simulateAtBat(doubleEntries, doubleGameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "single" }); // runner on 1st
+  simulateAtBat(doubleEntries, doubleGameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "double" }); // runner advances 1st->3rd, batter->2nd: runners on 2nd/3rd
+  const scoringDouble = simulateAtBat(doubleEntries, doubleGameId, { outcomeCategory: "offense", outcomeType: "hit", outcomeDetail: "double" });
+  check("double advances both runners home (2 runs)", 2, scoringDouble.runsScored);
+  check("2-run double RBI equals runsScored (2)", 2, scoringDouble.rbi);
+  check("2-run double badCount = baseBadCount(1) + rbi(2) = 3", 3, scoringDouble.badCount);
+  check("2-run double delta = goodCount(0) - badCount(3) = -3", -3, scoringDouble.delta);
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 11: End Session after 7 completed innings (valid, not a fixed 9)
+// ---------------------------------------------------------------------------
+
+runScenario("end-session-after-7-innings", "End Session Is Valid After 7 Completed Innings (Not A Fixed 9)", "Session", (check) => {
+  const gameId = 200;
+  const entries: Entry[] = [];
+  for (let inning = 0; inning < 7; inning++) {
+    simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+    simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+    simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+  }
+
+  const summary = computeSessionSummary(entries, gameId, "test-session-7", "2026-07-06T12:00:00.000Z");
+  check("7 innings completed", 7, summary.inningsCompleted);
+  check("no partial inning left in progress (exactly 21 outs, no 8th inning started)", undefined, summary.currentInning);
+  check("session is eligible to end (inningsCompleted >= 1)", true, summary.inningsCompleted >= 1);
+  check("totalOutsRecorded is 21 (7 x 3)", 21, summary.totalOutsRecorded);
+  check("totalGoodUnits is 21 (21 strikeouts, no LOB since bases always empty)", 21, summary.totalGoodUnits);
+  check("totalBadUnits is 0 (no offense outcomes)", 0, summary.totalBadUnits);
+  check("sessionEabrFraction is null when totalBadUnits is 0", null, summary.sessionEabrFraction);
+  check("sessionEabrDelta = 21 - 0 = 21", 21, summary.sessionEabrDelta);
+  check("inningSummaries has exactly 7 entries, all completed", true, summary.inningSummaries.length === 7 && summary.inningSummaries.every(i => i.completed));
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 12: End Session before reaching 9 innings, with a partial inning
+// ---------------------------------------------------------------------------
+
+runScenario("end-session-before-9-innings", "End Session Is Valid Before 9 Innings, Including A Partial Final Inning", "Session", (check) => {
+  const gameId = 201;
+  const entries: Entry[] = [];
+  // Inning 1: complete (3 outs).
+  simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+  simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+  simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "strikeout" });
+  // Inning 2: only 1 out recorded, session ends mid-inning.
+  const partialAtBat = simulateAtBat(entries, gameId, { outcomeCategory: "defense", outcomeType: "fly_out", outcomeDetail: "infield" });
+
+  const summary = computeSessionSummary(entries, gameId, "test-session-partial", "2026-07-06T13:00:00.000Z");
+  check("only 1 inning is fully completed", 1, summary.inningsCompleted);
+  check("session is eligible to end after just 1 completed inning (not 9)", true, summary.inningsCompleted >= 1);
+  check("the in-progress 2nd inning is reported as currentInning", 2, summary.currentInning);
+  check("totalOutsRecorded is 4 (3 complete + 1 partial)", 4, summary.totalOutsRecorded);
+  check("partial inning's at-bat still counted in totalGoodUnits", true, summary.totalGoodUnits >= partialAtBat.goodCount);
+  check("inningSummaries includes both the completed inning and the in-progress one", 2, summary.inningSummaries.length);
+  check("2nd inningSummary is not completed", false, summary.inningSummaries[1]!.completed);
+
+  // A subsequent end-session call for a brand-new empty game should be rejected upstream (0 completed innings) —
+  // verified here at the computeSessionSummary level so the /sessions/end route's guard is exercised against real data.
+  const emptyGameSummary = computeSessionSummary([], 999, "test-session-empty", "2026-07-06T13:05:00.000Z");
+  check("a game with zero at-bats has 0 completed innings (route should reject ending it)", 0, emptyGameSummary.inningsCompleted);
 });
 
 // ---------------------------------------------------------------------------

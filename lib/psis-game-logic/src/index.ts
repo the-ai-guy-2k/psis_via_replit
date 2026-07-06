@@ -240,3 +240,148 @@ export function resolveInningForNewAtBat(
     ? { inningNumber: latest.inningNumber + 1, currentOuts: 0, baseState: emptyBaseState() }
     : { inningNumber: latest.inningNumber, currentOuts: latest.outs, baseState: latest.baseState };
 }
+
+/**
+ * RBI for a single at-bat, per the ACI live-testing-feedback patch: RBI is
+ * simply the runs this at-bat drove in via base-state advancement
+ * (runsScored), since defensive outcomes never advance runners and thus
+ * always compute runsScored = 0 already. The legacy manual `run_scored`
+ * override predates base-state tracking and is intentionally excluded (its
+ * own good/bad units are already neutralized to 0 — see computeEabrUnits —
+ * so it must not also contribute an RBI bad-unit penalty).
+ */
+export function computeRbi(runsScored: number, isLegacyManualOverride: boolean): number {
+  return isLegacyManualOverride ? 0 : runsScored;
+}
+
+export interface EabrUnitsInput {
+  resultCategory: "good" | "bad";
+  /** True only for the legacy `run_scored` outcomeType, which predates the EABR unit system entirely. */
+  isLegacyManualOverride: boolean;
+  /** Only set on the at-bat that records an inning's 3rd out. */
+  playersLeftOnBase?: number;
+  /** RBI driven in on this at-bat (see computeRbi) — each RBI is an extra bad unit. */
+  rbi: number;
+}
+
+export interface EabrUnits {
+  goodCount: number;
+  badCount: number;
+  delta: number;
+}
+
+/**
+ * The single source of truth for EABR good/bad unit + delta computation,
+ * shared by the API server (entries.ts) and the scenario test script so the
+ * rule can never drift between the two call sites.
+ *
+ * Official EABR rules (ACI live-testing-feedback patch):
+ * - 1 base good unit for a good (defense) outcome, plus 1 extra good unit
+ *   per player left on base if this at-bat completed the inning (LOB is
+ *   folded directly into goodCount, never tracked as a separate field).
+ * - 1 base bad unit for a bad (offense) outcome, PLUS 1 additional bad unit
+ *   per RBI driven in on this at-bat (badCount = baseBadCount + rbi). RBI is
+ *   already runsScored-derived, so this does not double-subtract runsScored
+ *   anywhere else — runsScored is only ever stored/displayed, never itself
+ *   subtracted from delta.
+ * - The legacy `run_scored` manual-override outcomeType is neutralized to
+ *   0/0/0 entirely (both units and RBI), matching its pre-existing
+ *   backward-compatibility treatment.
+ * - Delta = goodCount - badCount.
+ */
+export function computeEabrUnits(input: EabrUnitsInput): EabrUnits {
+  if (input.isLegacyManualOverride) {
+    return { goodCount: 0, badCount: 0, delta: 0 };
+  }
+  const baseGoodCount = input.resultCategory === "good" ? 1 : 0;
+  const baseBadCount = input.resultCategory === "bad" ? 1 : 0;
+  const goodCount = baseGoodCount + (input.playersLeftOnBase ?? 0);
+  const badCount = baseBadCount + input.rbi;
+  return { goodCount, badCount, delta: goodCount - badCount };
+}
+
+export interface Session {
+  sessionId: string;
+  endedAt: string;
+  gameId: number;
+  inningsCompleted: number;
+  /** The inning number that was still in progress (not yet 3 outs) when the session ended, if any. */
+  currentInning?: number;
+  totalOutsRecorded: number;
+  totalGoodUnits: number;
+  totalBadUnits: number;
+  /** Good units / Bad units. null when totalBadUnits is 0 (undefined ratio). */
+  sessionEabrFraction: number | null;
+  sessionEabrDelta: number;
+  totalHitsAllowed: number;
+  totalWalksAllowed: number;
+  totalHomeRunsAllowed: number;
+  totalExtraBaseHitsAllowed: number;
+  totalRBIAllowed: number;
+  totalRunsAllowed: number;
+  totalStrikeouts: number;
+  totalFlyOuts: number;
+  totalGroundOuts: number;
+  totalLOB: number;
+  inningSummaries: InningState[];
+  atBats: Entry[];
+}
+
+/**
+ * Aggregates every at-bat belonging to `gameId` into a persistable session
+ * summary for the "End Session" flow. Pure/no I/O so both the API server and
+ * the scenario test script can exercise the exact same logic. Does not
+ * enforce the "at least 1 completed inning" business rule itself — callers
+ * (the /sessions/end route, or a test asserting on it) check
+ * `inningsCompleted` and decide whether to persist/reject.
+ */
+export function computeSessionSummary(entries: Entry[], gameId: number, sessionId: string, endedAt: string): Session {
+  const atBats = entries
+    .filter(e => isEntryInGame(e, gameId))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const inningNumbers = Array.from(
+    new Set(atBats.filter((e): e is Entry & { inningNumber: number } => e.inningNumber !== undefined).map(e => e.inningNumber)),
+  ).sort((a, b) => a - b);
+
+  const inningSummaries = inningNumbers.map(n => computeInningState(entries, n, gameId));
+  const inningsCompleted = inningSummaries.filter(i => i.completed).length;
+  const lastInning = inningSummaries[inningSummaries.length - 1];
+  const currentInning = lastInning && !lastInning.completed ? lastInning.inningNumber : undefined;
+
+  const totalOutsRecorded = atBats.reduce((sum, e) => sum + (e.outsAdded ?? 0), 0);
+  const totalGoodUnits = atBats.reduce((sum, e) => sum + e.goodCount, 0);
+  const totalBadUnits = atBats.reduce((sum, e) => sum + e.badCount, 0);
+  const totalRBIAllowed = atBats.reduce((sum, e) => sum + (e.rbi ?? 0), 0);
+  const totalRunsAllowed = atBats.reduce((sum, e) => sum + (e.runsScored ?? 0), 0);
+  const totalLOB = atBats.reduce((sum, e) => sum + (e.playersLeftOnBase ?? 0), 0);
+
+  const isHitWithDetail = (e: Entry, detail: OutcomeDetail) => e.outcomeType === "hit" && e.outcomeDetail === detail;
+
+  return {
+    sessionId,
+    endedAt,
+    gameId,
+    inningsCompleted,
+    currentInning,
+    totalOutsRecorded,
+    totalGoodUnits,
+    totalBadUnits,
+    sessionEabrFraction: totalBadUnits === 0 ? null : totalGoodUnits / totalBadUnits,
+    sessionEabrDelta: totalGoodUnits - totalBadUnits,
+    totalHitsAllowed: atBats.filter(e => isHitWithDetail(e, "single")).length,
+    totalWalksAllowed: atBats.filter(e => e.outcomeType === "walk").length,
+    totalHomeRunsAllowed: atBats.filter(e => isHitWithDetail(e, "home_run") || e.outcomeType === "home_run").length,
+    totalExtraBaseHitsAllowed: atBats.filter(
+      e => isHitWithDetail(e, "double") || isHitWithDetail(e, "triple") || e.outcomeType === "extra_base_hit",
+    ).length,
+    totalRBIAllowed,
+    totalRunsAllowed,
+    totalStrikeouts: atBats.reduce((sum, e) => sum + (e.strikeoutCount ?? 0), 0),
+    totalFlyOuts: atBats.filter(e => e.outcomeType === "fly_out").length,
+    totalGroundOuts: atBats.filter(e => e.outcomeType === "ground_out").length,
+    totalLOB,
+    inningSummaries,
+    atBats,
+  };
+}

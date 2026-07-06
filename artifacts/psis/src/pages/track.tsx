@@ -5,11 +5,13 @@ import {
   useListEntries,
   useGetCurrentInning,
   useStartNewGame,
+  useEndSession,
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
   getGetCurrentInningQueryKey,
+  getListSessionsQueryKey,
 } from "@workspace/api-client-react";
-import type { OutcomeCategory, OutcomeType, OutcomeDetail, BaseState } from "@workspace/api-client-react";
+import type { OutcomeCategory, OutcomeType, OutcomeDetail, BaseState, Session } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +20,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper, ChevronLeft, RotateCcw, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Swords,
+  Circle,
+  PartyPopper,
+  ChevronLeft,
+  RotateCcw,
+  RefreshCw,
+  FlagOff,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   describeOutcome,
@@ -111,10 +124,12 @@ export default function Track() {
   const { data: inning, isLoading: inningLoading } = useGetCurrentInning();
   const createEntry = useCreateEntry();
   const startNewGameMutation = useStartNewGame();
+  const endSessionMutation = useEndSession();
 
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
   const [acknowledgedInning, setAcknowledgedInning] = useState<number | undefined>(undefined);
+  const [lastSessionSummary, setLastSessionSummary] = useState<Session | undefined>(undefined);
 
   // Outcome types that need a follow-up click before an EABR (End of At-Bat
   // Result) is reached. Everything else (strikeout, walk) is itself the
@@ -258,6 +273,36 @@ export default function Track() {
     });
   };
 
+  // "End Session" only requires at least 1 fully completed inning — it is
+  // never gated on reaching a fixed 9 innings (a session can run short, e.g.
+  // 7 innings, or end mid-inning after its last completed inning).
+  const canEndSession = scoreboardSlots.some(s => s.completed);
+
+  const endSession = () => {
+    endSessionMutation.mutate(undefined, {
+      onSuccess: result => {
+        setLastSessionSummary(result.session);
+        resetForm();
+        setAcknowledgedInning(undefined);
+        queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+        toast({
+          title: "Session Ended",
+          description: `Session summary saved (${result.session.inningsCompleted} inning${result.session.inningsCompleted === 1 ? "" : "s"} completed). Tracker reset for a new game.`,
+        });
+      },
+      onError: () => {
+        toast({
+          title: "Error",
+          description: "Failed to end session — at least 1 completed inning is required.",
+          variant: "destructive",
+        });
+      },
+    });
+  };
+
   const waitingForNextInning = !!inning?.completed && acknowledgedInning === inning.inningNumber;
   // Players left on base and the final delta are both computed server-side
   // the instant the 3rd out is recorded, so the completed summary (incl.
@@ -287,16 +332,29 @@ export default function Track() {
           <CardHeader className="bg-muted/50 pb-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={startNewGame}
-                disabled={startNewGameMutation.isPending}
-                data-testid="button-new-game"
-              >
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                New Game
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={endSession}
+                  disabled={!canEndSession || endSessionMutation.isPending}
+                  title={canEndSession ? undefined : "Complete at least 1 inning before ending the session"}
+                  data-testid="button-end-session"
+                >
+                  <FlagOff className="w-3.5 h-3.5 mr-1.5" />
+                  End Session
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startNewGame}
+                  disabled={startNewGameMutation.isPending}
+                  data-testid="button-new-game"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  New Game
+                </Button>
+              </div>
             </div>
             {!inningLoading && (
               <div className="mt-3 space-y-2">
@@ -636,6 +694,75 @@ export default function Track() {
             )}
           </CardContent>
         </Card>
+
+        {lastSessionSummary && (
+          <Card className="rounded-none border-primary/30" data-testid="session-summary-panel">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle className="uppercase tracking-wider text-sm flex items-center gap-2">
+                  <FlagOff className="w-4 h-4" />
+                  Session Summary
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLastSessionSummary(undefined)}
+                  data-testid="btn-dismiss-session-summary"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Innings Completed</div>
+                  <div className="font-mono font-bold text-xl" data-testid="session-innings-completed">
+                    {lastSessionSummary.inningsCompleted}
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Good / Bad Units</div>
+                  <div className="font-mono font-bold text-xl" data-testid="session-good-bad">
+                    {lastSessionSummary.totalGoodUnits}/{lastSessionSummary.totalBadUnits}
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">EABR Delta</div>
+                  <div
+                    className={`font-mono font-bold text-xl ${lastSessionSummary.sessionEabrDelta > 0 ? "text-success" : lastSessionSummary.sessionEabrDelta < 0 ? "text-destructive" : ""}`}
+                    data-testid="session-eabr-delta"
+                  >
+                    {lastSessionSummary.sessionEabrDelta > 0 ? "+" : ""}
+                    {lastSessionSummary.sessionEabrDelta}
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">RBI Allowed</div>
+                  <div className="font-mono font-bold text-xl" data-testid="session-rbi">
+                    {lastSessionSummary.totalRBIAllowed}
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Runs Allowed</div>
+                  <div className="font-mono font-bold text-xl" data-testid="session-runs">
+                    {lastSessionSummary.totalRunsAllowed}
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-sm p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">LOB</div>
+                  <div className="font-mono font-bold text-xl" data-testid="session-lob">
+                    {lastSessionSummary.totalLOB}
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saved for future season aggregates. The Tracker is now reset for a new game.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {recentEntry && (
           <Alert className={recentEntry.resultCategory === "good" ? "border-success bg-success/5" : "border-destructive bg-destructive/5"}>

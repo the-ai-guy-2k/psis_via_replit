@@ -1,0 +1,353 @@
+PSIS ACI — LIVE TESTING FEEDBACK PATCH
+
+MISSION
+
+Update PSIS based on live MLB The Show 2025 testing feedback.
+
+This ACI focuses only on:
+
+1. RBI calculation from hits and base state.
+2. EABR score update to include RBI impact.
+3. Ability to end and save a pitching session before or after 9 innings.
+4. Save session results for aggregated analysis.
+
+Do not add Pitching Training Tool.
+Do not add Stat Head version.
+
+==================================================
+CURRENT TRUTH
+==================================================
+
+Live testing showed PSIS can track innings, but two important gaps remain:
+
+1. RBI / runs impact is not properly included in EABR score.
+2. User cannot end a pitching session early and save the results.
+
+Example live session:
+
+Pitching session ended after 7 innings, but PSIS did not provide a clean way to save final session results for future aggregate analysis.
+
+==================================================
+PATCH 1 — RBI CALCULATION
+==================================================
+
+Add RBI calculation based on offensive outcomes and current base state.
+
+RBI should be calculated automatically from:
+
+- Hit type
+- Runners currently on base
+- Batter result
+- Runs scored from the play
+
+==================================================
+RBI RULES
+==================================================
+
+For PSIS MVP:
+
+RBI = number of runs scored because of the offensive result.
+
+Examples:
+
+Bases empty + Home Run = 1 RBI
+
+Runner on 1B + Home Run = 2 RBI
+
+Runners on 1B and 2B + Home Run = 3 RBI
+
+Bases loaded + Home Run = 4 RBI
+
+Bases loaded + Walk = 1 RBI
+
+Single / Double / Triple should calculate RBI based on runners advanced home by the existing base-state logic.
+
+If PSIS base advancement logic determines a runner scored, count that run as RBI.
+
+==================================================
+PATCH 2 — EABR SCORE UPDATE
+==================================================
+
+RBI must affect the EABR score.
+
+Update official EABR scoring logic:
+
+Good EABR Units:
+
+- Strikeout = 1
+- Fly Out = 1
+- Ground Out = 1
+- Each runner left on base = 1
+
+Bad EABR Units:
+
+- Hit = 1
+- Walk = 1
+- Home Run = 1
+- Extra Base Hit = 1
+- Each RBI = 1 additional bad unit
+
+Examples:
+
+Solo Home Run:
+Bad units = 1 for HR + 1 RBI = 2 bad units
+
+Two-run Home Run:
+Bad units = 1 for HR + 2 RBI = 3 bad units
+
+Bases Loaded Walk:
+Bad units = 1 for Walk + 1 RBI = 2 bad units
+
+Double scoring two runs:
+Bad units = 1 for Extra Base Hit + 2 RBI = 3 bad units
+
+==================================================
+UPDATED EABR FORMULAS
+==================================================
+
+EABR Fraction:
+
+Total Good Units / Total Bad Units
+
+EABR Delta:
+
+Total Good Units - Total Bad Units
+
+Runs scored should not be separately subtracted if RBI already represents the run impact.
+
+Do not double count runs scored and RBI.
+
+RBI becomes the run-impact penalty.
+
+==================================================
+PATCH 3 — END PITCHING SESSION
+==================================================
+
+Add an End Session button.
+
+The user must be able to end a pitching session at any point after at least one completed inning.
+
+This supports real game usage where the pitcher may only pitch:
+
+- 1 inning
+- 1.1 innings
+- 2 innings
+- 7 innings
+- any partial or complete session
+
+==================================================
+END SESSION BEHAVIOR
+==================================================
+
+When user clicks End Session:
+
+1. Stop active tracking.
+2. Calculate pitching session totals.
+3. Save session summary.
+4. Make session available for aggregated analysis.
+5. Show final session summary to user.
+
+==================================================
+SESSION SUMMARY DATA
+==================================================
+
+Save the following:
+
+- sessionId
+- date/time
+- inningsCompleted
+- currentInning if partial
+- totalOutsRecorded
+- totalGoodUnits
+- totalBadUnits
+- sessionEabrFraction
+- sessionEabrDelta
+- totalHitsAllowed
+- totalWalksAllowed
+- totalHomeRunsAllowed
+- totalExtraBaseHitsAllowed
+- totalRBIAllowed
+- totalRunsAllowed
+- totalStrikeouts
+- totalFlyOuts
+- totalGroundOuts
+- totalLOB
+- inningSummaries
+- EABR records
+
+==================================================
+SESSION EABR CALCULATION
+==================================================
+
+Session EABR Fraction:
+
+Total Session Good Units / Total Session Bad Units
+
+Session EABR Delta:
+
+Total Session Good Units - Total Session Bad Units
+
+Use the same official EABR logic as inning calculations.
+
+==================================================
+PATCH 4 — AGGREGATED ANALYSIS STORAGE
+==================================================
+
+Persist completed pitching sessions so future analysis can use them.
+
+Store saved sessions in existing app persistence.
+
+If the app currently uses JSON/local storage/backend persistence, use the existing pattern.
+
+Do not introduce a new database unless required.
+
+The saved sessions should support future aggregate views such as:
+
+- average session delta
+- average EABR fraction
+- best session
+- worst session
+- trend by date
+- total innings pitched
+
+Do not build those aggregate charts yet.
+
+Only save the data so those features can be built later.
+
+==================================================
+UI REQUIREMENTS
+==================================================
+
+Tracker page should include:
+
+- End Session button
+- Final Session Summary after ending
+
+Final Session Summary should show:
+
+- Innings completed
+- Total outs
+- Session EABR Delta
+- Session EABR Fraction
+- Total RBI allowed
+- Total runs allowed
+- Hits allowed
+- Walks allowed
+- Home runs allowed
+- Strikeouts
+- LOB
+
+==================================================
+IMPORTANT RULES
+==================================================
+
+Do not require 9 innings to save a session.
+
+Do not lose data if the session ends at 7 innings.
+
+Do not clear session data before saving it.
+
+New Game should reset active tracking, but End Session should save results first.
+
+==================================================
+TEST UPDATES
+==================================================
+
+Update scenario tests to include RBI logic and session save logic.
+
+Required tests:
+
+1. Solo HR
+Expected:
+- RBI = 1
+- Bad units = 2
+
+2. Bases loaded HR
+Expected:
+- RBI = 4
+- Bad units = 5
+
+3. Bases loaded walk
+Expected:
+- RBI = 1
+- Bad units = 2
+
+4. Double scoring two runs
+Expected:
+- RBI = 2
+- Bad units = 3
+
+5. End session after 7 completed innings
+Expected:
+- session saved
+- inningsCompleted = 7
+- session totals calculated
+- session available in saved sessions
+
+6. End session before 9 innings
+Expected:
+- no error
+- summary generated
+- aggregate-ready data stored
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Pitching Training Tool
+- Stat Head version
+- AI recommendations
+- Advanced analytics charts
+- Player database
+- Cloud database
+- Authentication
+
+This ACI is only for RBI/EABR logic and session saving.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. RBI is calculated from hits/walks and base state.
+
+2. RBI affects EABR bad units.
+
+3. Runs are not double-counted if RBI is already counted.
+
+4. Inning EABR Delta uses Good Units - Bad Units.
+
+5. Inning EABR Fraction uses Good Units / Bad Units.
+
+6. End Session button exists.
+
+7. User can end a session before 9 innings.
+
+8. Session summary is calculated.
+
+9. Session data is saved for future aggregated analysis.
+
+10. Scenario tests are updated.
+
+11. Test report regenerates.
+
+12. Tracker remains usable after session save.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- RBI logic added
+- EABR formula updates
+- Session save logic added
+- Persistence changes
+- UI changes
+- Test results
+- Downloadable report status
+- PASS / PARTIAL PASS / FAIL

@@ -14,6 +14,8 @@ import {
   resolveInningForNewAtBat,
   applyOutcomeToBaseState,
   getCurrentGameId,
+  computeEabrUnits,
+  computeRbi,
 } from "../lib/psisStore";
 
 const router: IRouter = Router();
@@ -78,12 +80,6 @@ router.post("/entries", async (req, res): Promise<void> => {
   }
 
   const resultCategory = resultCategoryForOutcomeCategory(input.outcomeCategory);
-  // Official EABR unit rule: each qualifying event is worth exactly 1 unit,
-  // regardless of play detail (a ground_out/double_play or /triple_play is
-  // still only 1 good unit; a double/triple/home_run hit is still only 1 bad
-  // unit). Play detail is stored (outcomeDetail) but never multiplies units.
-  const baseGoodCount = !isRunScored && resultCategory === "good" ? 1 : 0;
-  const badCount = !isRunScored && resultCategory === "bad" ? 1 : 0;
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
 
   const existingEntries = await listEntries();
@@ -106,15 +102,16 @@ router.post("/entries", async (req, res): Promise<void> => {
     ? [baseStateAfterAtBat.firstBase, baseStateAfterAtBat.secondBase, baseStateAfterAtBat.thirdBase].filter(Boolean).length
     : undefined;
 
-  // Official EABR rule: each player left on base at inning-completion is
-  // worth 1 additional good unit, folded into this completing entry's
-  // goodCount (see "neutralize-and-bake-in" pattern — keeps computeInningState's
-  // sum(entry.goodCount) correct with no separate LOB-units aggregation).
-  const goodCount = baseGoodCount + (playersLeftOnBase ?? 0);
-
-  // Official EABR Delta = Good Units - Bad Units. Runs scored are still
-  // computed/stored (see runsScored above) but are no longer subtracted.
-  const delta = goodCount - badCount;
+  // RBI is the runs this at-bat drove in (see computeRbi) — each RBI adds 1
+  // extra EABR bad unit on top of the base 1-unit-per-bad-outcome rule
+  // (computeEabrUnits), without ever double-subtracting runsScored itself.
+  const rbi = computeRbi(runsScored, isRunScored);
+  const { goodCount, badCount, delta } = computeEabrUnits({
+    resultCategory,
+    isLegacyManualOverride: isRunScored,
+    playersLeftOnBase,
+    rbi,
+  });
 
   const entry = {
     ...input,
@@ -126,6 +123,7 @@ router.post("/entries", async (req, res): Promise<void> => {
     strikeoutCount,
     delta,
     runsScored,
+    rbi,
     baseState: baseStateAfterAtBat,
     inningNumber,
     gameId,

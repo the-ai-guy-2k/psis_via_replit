@@ -2,5 +2,6 @@
 - [Artifact workflow naming](artifact-workflow-naming.md) — restart_workflow needs the exact name from listWorkflows(), not the artifact title or slug guess.
 - [Derived-state display vs mutation split](derived-state-display-vs-mutation.md) — a read-only "current state" endpoint must never auto-advance state as a side effect of being read; keep display and advance-on-write logic in separate functions.
 - [Neutralize-and-bake-in delta trick](neutralize-and-bake-in-delta-trick.md) — folding a new subtractive factor into per-entry `delta` (set good/bad to 0 for that entry) avoids special-casing aggregate formulas when they're just `sum(delta)`.
+- [Orval named-schema zod gotcha](orval-named-schema-zod-gotcha.md) — a response schema referenced only via $ref gets no zod const generated; inline it if the server needs to `.parse()` it.
 - [Scenario test via extracted pure-logic lib](scenario-test-lib-extraction.md) — extract server-only pure rules into a composite lib so a standalone test script can import real logic without booting a server.
 - [Session-boundary reset pattern](session-boundary-reset-pattern.md) — for a "reset the live view but keep history" request, add a boundary id (gameId-style) instead of deleting/mutating stored rows.
