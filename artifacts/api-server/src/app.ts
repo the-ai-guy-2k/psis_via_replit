@@ -28,7 +28,10 @@ function setupProductionFrontend(app: Express): void {
   const staticMount =
     basePath === "/" ? "" : basePath.replace(/\/$/, "");
 
-  app.use(staticMount || "/", express.static(FRONTEND_DIST_DIR, { index: false }));
+  app.use(
+    staticMount || "/",
+    express.static(FRONTEND_DIST_DIR, { index: "index.html" }),
+  );
 
   app.get(`${staticMount}/*splat`, (req, res, next) => {
     if (req.path.startsWith("/api")) {
