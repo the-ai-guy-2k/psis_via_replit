@@ -160,8 +160,11 @@ jobs:
       - name: Verify ECR image (pull and inspect)
         id: ecr_verify
         env:
+          DOCKERHUB_IMAGE: ${{ env.DOCKERHUB_IMAGE }}
           ECR_URI: ${{ steps.ecr_meta.outputs.ecr_uri }}
           COMMIT_SHA: ${{ github.sha }}
+          MIRROR_ECR_DIGEST: ${{ steps.mirror.outputs.ecr_digest }}
+          HUB_IMAGE_ID: ${{ steps.mirror.outputs.hub_image_id }}
         run: |
           set -euo pipefail
 
@@ -182,11 +185,24 @@ jobs:
           echo "ecr_metadata_digest=${META_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "ecr_tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
-          PULLED_ID=$(docker image inspect "${ECR_URI}:latest" --format '{{.Id}}')
-          if [ "${PULLED_ID}" != "${{ steps.mirror.outputs.hub_image_id }}" ]; then
-            echo "Pulled ECR image content does not match Docker Hub source"
+          # ECR registry digest must match the digest recorded during mirror push.
+          if [ "${META_DIGEST}" != "${MIRROR_ECR_DIGEST}" ]; then
+            echo "ECR describe-images digest does not match mirror push digest"
+            echo "describe-images: ${META_DIGEST}"
+            echo "mirror push:     ${MIRROR_ECR_DIGEST}"
             exit 1
           fi
+          echo "digest_result=PASS" >> "$GITHUB_OUTPUT"
+
+          # docker image .Id differs after registry pull (manifest vs config); compare layer stack.
+          docker pull "${DOCKERHUB_IMAGE}:latest" >/dev/null
+          HUB_LAYERS=$(docker image inspect "${DOCKERHUB_IMAGE}:latest" --format '{{json .RootFS.Layers}}')
+          PULLED_LAYERS=$(docker image inspect "${ECR_URI}:latest" --format '{{json .RootFS.Layers}}')
+          if [ "${HUB_LAYERS}" != "${PULLED_LAYERS}" ]; then
+            echo "Pulled ECR image layers do not match Docker Hub source"
+            exit 1
+          fi
+          echo "content_result=PASS" >> "$GITHUB_OUTPUT"
           echo "metadata_result=PASS" >> "$GITHUB_OUTPUT"
           echo "tags_result=PASS" >> "$GITHUB_OUTPUT"
           echo "pull_validation=PASS" >> "$GITHUB_OUTPUT"
@@ -327,6 +343,8 @@ jobs:
             echo "|-------|--------|"
             echo "| Pull from ECR | ${PULL_VALIDATION} |"
             echo "| docker image inspect | ${{ steps.ecr_verify.outputs.inspect_result }} |"
+            echo "| ECR digest matches mirror | ${{ steps.ecr_verify.outputs.digest_result }} |"
+            echo "| Layer stack matches Docker Hub | ${{ steps.ecr_verify.outputs.content_result }} |"
             echo "| describe-images metadata | ${{ steps.ecr_verify.outputs.metadata_result }} |"
             echo "| Tags in ECR | ${ECR_TAGS} |"
             echo ""
