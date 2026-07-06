@@ -18,3 +18,9 @@ id = "ZriYPwrmV1ICV_SL7QQM5"
 uri = "file://artifacts/psis/public/reports/PSIS_Test_Report.json"
 type = "unspecified"
 title = "PSIS Test Report (JSON)"
+
+[[outputs]]
+id = "JCjzGqj3QcEHKYBmx4Zi3"
+uri = "file://exports/PSIS_Test_Report.zip"
+type = "unspecified"
+title = "PSIS Test Report (.md + .json)"
