@@ -342,38 +342,76 @@ export default function Track() {
                     <BaseStateDisplay baseState={displayBaseState} />
                   </div>
                 </div>
-                <div
-                  className="grid border overflow-hidden divide-x"
-                  style={{ gridTemplateColumns: `repeat(${SCOREBOARD_INNINGS}, minmax(0, 1fr))` }}
-                  data-testid="line-score-scoreboard"
-                >
-                  {scoreboardSlots.map(slot => (
-                    <div key={slot.inningNumber} className="flex flex-col divide-y" data-testid={`scoreboard-slot-${slot.inningNumber}`}>
-                      <div
-                        className={`text-center font-mono font-bold text-sm py-1 ${
-                          slot.completed
-                            ? slot.delta > 0
-                              ? "text-success"
-                              : slot.delta < 0
-                                ? "text-destructive"
-                                : "text-foreground"
-                            : "text-muted-foreground/30"
-                        }`}
-                        data-testid={`scoreboard-delta-${slot.inningNumber}`}
-                      >
-                        {slot.completed ? `${slot.delta > 0 ? "+" : ""}${slot.delta}` : ""}
-                      </div>
-                      <div
-                        className="text-center font-mono text-[10px] text-muted-foreground py-1"
-                        data-testid={`scoreboard-fraction-${slot.inningNumber}`}
-                      >
-                        {slot.completed ? `${slot.goodCount}/${slot.totalAtBats}` : ""}
-                      </div>
-                      <div className="text-center text-[10px] font-semibold text-muted-foreground py-1 bg-muted/40">
-                        {slot.inningNumber}
-                      </div>
-                    </div>
-                  ))}
+                <div className="border overflow-x-auto" data-testid="line-score-scoreboard">
+                  <table className="w-full table-fixed border-collapse">
+                    <colgroup>
+                      <col style={{ width: "6.5rem" }} />
+                      {scoreboardSlots.map(slot => (
+                        <col key={slot.inningNumber} style={{ width: `calc((100% - 6.5rem) / ${SCOREBOARD_INNINGS})` }} />
+                      ))}
+                    </colgroup>
+                    <tbody>
+                      <tr className="border-b">
+                        <th
+                          scope="row"
+                          className="border-r-2 border-success h-7 px-2 text-left align-middle text-[10px] uppercase tracking-wider text-muted-foreground font-semibold whitespace-nowrap"
+                        >
+                          EABR Delta
+                        </th>
+                        {scoreboardSlots.map(slot => (
+                          <td
+                            key={slot.inningNumber}
+                            className={`border-l h-7 px-1 text-center align-middle font-mono font-bold text-sm ${
+                              slot.completed
+                                ? slot.delta > 0
+                                  ? "text-success"
+                                  : slot.delta < 0
+                                    ? "text-destructive"
+                                    : "text-foreground"
+                                : "text-muted-foreground/30"
+                            }`}
+                            data-testid={`scoreboard-delta-${slot.inningNumber}`}
+                          >
+                            {slot.completed ? `${slot.delta > 0 ? "+" : ""}${slot.delta}` : ""}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b">
+                        <th
+                          scope="row"
+                          className="border-r-2 border-sky-500 h-7 px-2 text-left align-middle text-[10px] uppercase tracking-wider text-muted-foreground font-semibold whitespace-nowrap"
+                        >
+                          EABR Fraction
+                        </th>
+                        {scoreboardSlots.map(slot => (
+                          <td
+                            key={slot.inningNumber}
+                            className="border-l h-7 px-1 text-center align-middle font-mono text-[10px] text-muted-foreground"
+                            data-testid={`scoreboard-fraction-${slot.inningNumber}`}
+                          >
+                            {slot.completed ? `${slot.goodCount}/${slot.totalAtBats}` : ""}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th
+                          scope="row"
+                          className="border-r-2 border-purple-500 h-7 px-2 text-left align-middle text-[10px] uppercase tracking-wider text-muted-foreground font-semibold whitespace-nowrap bg-muted/40"
+                        >
+                          Inning Number
+                        </th>
+                        {scoreboardSlots.map(slot => (
+                          <td
+                            key={slot.inningNumber}
+                            className="border-l h-7 px-1 text-center align-middle text-[10px] font-semibold text-muted-foreground bg-muted/40"
+                            data-testid={`scoreboard-inning-${slot.inningNumber}`}
+                          >
+                            {slot.inningNumber}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}

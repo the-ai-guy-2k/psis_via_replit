@@ -1,0 +1,166 @@
+PSIS ACI UPDATE — FINAL SCOREBOARD TABLE POLISH FOR V1
+
+MISSION
+
+Apply final UI polish to the completed innings scoreboard table.
+
+This should make the table release-ready for PSIS Tracker v1.
+
+==================================================
+CHANGE 1 — CONSISTENT COLUMN DIMENSIONS
+==================================================
+
+The completed innings scoreboard currently changes cell sizing when innings have data versus when they are empty.
+
+Fix this.
+
+All inning columns must have the same width and height.
+
+Innings 1 through 9 should remain visually consistent whether they contain data or not.
+
+Requirements:
+
+- Inning 1 column width = Inning 2 column width = all other inning column widths.
+- Completed innings and empty innings must use the same table cell dimensions.
+- Do not allow data-filled cells to shrink or expand differently from empty cells.
+- Use fixed table layout or equivalent CSS if needed.
+
+Suggested CSS approach:
+
+table-layout: fixed;
+width: 100%;
+
+Each inning column:
+
+width: calc(100% / 9);
+
+Each row cell:
+
+height: consistent fixed or min-height value;
+text-align: center;
+vertical-align: middle;
+
+==================================================
+CHANGE 2 — ADD ROW LABELS ON LEFT SIDE
+==================================================
+
+Add labels to the left side of the completed innings scoreboard.
+
+The labels should align with the three scoreboard rows.
+
+Rows:
+
+1. EABR Delta
+2. EABR Fraction
+3. Inning Number
+
+Label meaning:
+
+- EABR Delta = final inning delta
+- EABR Fraction = good EABR / total EABR
+- Inning Number = inning number 1 through 9
+
+The table should visually read like:
+
+                 1     2     3     4     5     6     7     8     9
+EABR Delta      +3    -5
+EABR Fraction   3/8   4/6
+Inning Number    1     2     3     4     5     6     7     8     9
+
+But keep the current stacked row structure.
+
+==================================================
+CHANGE 3 — ROW COLOR INTENT
+==================================================
+
+Use these row meanings based on the wireframe color references:
+
+Green row = EABR Delta
+
+Blue row = EABR Fraction
+
+Purple row = Inning Number
+
+Do not over-style.
+
+The labels can use subtle color markers, text color, or left border accents.
+
+Keep it clean and readable.
+
+==================================================
+UI REQUIREMENTS
+==================================================
+
+The completed innings scoreboard must:
+
+- show 9 inning columns every time
+- have consistent cell dimensions
+- include row labels on the left
+- keep data centered
+- preserve positive/negative delta coloring
+- fit inside the Game Status panel
+- avoid large cards
+- avoid wrapping weirdly
+- look like a compact baseball scoreboard
+
+==================================================
+DO NOT CHANGE
+==================================================
+
+Do not change:
+
+- delta calculation
+- EABR auto-save logic
+- inning completion logic
+- base state logic
+- New Game reset logic
+- Recent Log reset logic
+- dashboard logic
+
+This is UI/table polish only.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Inning columns 1 through 9 are equal width.
+
+2. Empty inning columns have same dimensions as completed inning columns.
+
+3. Row labels appear on the left side of the table.
+
+4. Labels are:
+   - EABR Delta
+   - EABR Fraction
+   - Inning Number
+
+5. Labels align with the correct rows.
+
+6. Positive and negative delta colors still work.
+
+7. Table fits cleanly in the Game Status panel.
+
+8. No game logic is changed.
+
+9. Tracker remains functional after the UI update.
+
+==================================================
+RELEASE READINESS NOTE
+==================================================
+
+If this passes validation, mark the Tracker feature as:
+
+PSIS Tracker v1 — Release Ready Candidate
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- UI changes made
+- Validation result
+- PASS / PARTIAL PASS / FAIL

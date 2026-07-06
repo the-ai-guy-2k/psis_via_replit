@@ -930,5 +930,46 @@
     "inningNumber": 1,
     "gameId": 2,
     "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "85e636b2-4dad-444b-ae6b-15b4490fd2e0",
+    "createdAt": "2026-07-06T00:52:32.333Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 1,
+    "gameId": 2,
+    "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "d0b53ee4-22af-468d-8c05-e4411b551cf9",
+    "createdAt": "2026-07-06T00:52:51.441Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 1,
+    "gameId": 2,
+    "outsAdded": 1,
+    "playersLeftOnBase": 0
   }
 ]
