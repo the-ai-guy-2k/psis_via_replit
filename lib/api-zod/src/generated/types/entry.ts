@@ -37,6 +37,8 @@ export interface Entry {
   delta: number;
   /** Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed. */
   inningNumber?: number;
+  /** Which "game" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker's live view (current inning/outs/completed innings); season dashboard aggregates ignore it and include all games. */
+  gameId?: number;
   /** Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs. */
   outsAdded?: number;
   notes?: string;

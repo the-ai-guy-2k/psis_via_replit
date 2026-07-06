@@ -4,6 +4,7 @@ import {
   useCreateEntry,
   useListEntries,
   useGetCurrentInning,
+  useStartNewGame,
   getListEntriesQueryKey,
   getGetDashboardQueryKey,
   getGetCurrentInningQueryKey,
@@ -17,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper, ChevronLeft, RotateCcw } from "lucide-react";
+import { CheckCircle2, AlertCircle, ShieldCheck, Swords, Circle, PartyPopper, ChevronLeft, RotateCcw, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   describeOutcome,
@@ -35,22 +36,33 @@ type WizardState = {
 
 const emptyWizard: WizardState = { started: false };
 
-type CompletedInningTile = { inningNumber: number; delta: number; goodCount: number; totalAtBats: number };
+const SCOREBOARD_INNINGS = 9;
+
+type ScoreboardSlot =
+  | { inningNumber: number; completed: true; delta: number; goodCount: number; totalAtBats: number }
+  | { inningNumber: number; completed: false };
 
 /**
- * Completed-inning scoreboard tiles for the Game Status Panel, derived
- * purely client-side from the full entries list — an inning counts as
- * "completed" once its at-bats' outsAdded sum to 3, mirroring the server's
- * own completion rule (see computeInningState in psisStore.ts) without
- * adding a new API endpoint.
+ * Compact 9-box line-score scoreboard slots for the Game Status Panel,
+ * derived purely client-side from the full entries list — an inning counts
+ * as "completed" once its at-bats' outsAdded sum to 3, mirroring the
+ * server's own completion rule (see computeInningState in psisStore.ts)
+ * without adding a new API endpoint. Only entries belonging to the current
+ * game (matching `currentGameId`, with legacy entries treated as game 1,
+ * mirroring the server's isEntryInGame rule) are counted, so a New Game
+ * always starts this scoreboard fresh even though old entries stay in
+ * storage for the season Dashboard. Always returns exactly 9 slots —
+ * innings with no at-bats yet, or not yet at 3 outs, render as empty
+ * placeholders (row 1/2 blank, row 3 shows the inning number).
  */
-function computeCompletedInningTiles(
-  entries: { inningNumber?: number; delta: number; outsAdded?: number; goodCount: number }[] | undefined,
-): CompletedInningTile[] {
-  if (!entries) return [];
+function computeScoreboardSlots(
+  entries: { inningNumber?: number; delta: number; outsAdded?: number; goodCount: number; gameId?: number }[] | undefined,
+  currentGameId: number | undefined,
+): ScoreboardSlot[] {
   const byInning = new Map<number, { delta: number; outs: number; goodCount: number; totalAtBats: number }>();
-  for (const entry of entries) {
+  for (const entry of entries ?? []) {
     if (entry.inningNumber === undefined) continue;
+    if (currentGameId !== undefined && (entry.gameId ?? 1) !== currentGameId) continue;
     const current = byInning.get(entry.inningNumber) ?? { delta: 0, outs: 0, goodCount: 0, totalAtBats: 0 };
     current.delta += entry.delta;
     current.outs += entry.outsAdded ?? 0;
@@ -58,10 +70,14 @@ function computeCompletedInningTiles(
     current.totalAtBats += 1;
     byInning.set(entry.inningNumber, current);
   }
-  return Array.from(byInning.entries())
-    .filter(([, v]) => v.outs >= 3)
-    .map(([inningNumber, v]) => ({ inningNumber, delta: v.delta, goodCount: v.goodCount, totalAtBats: v.totalAtBats }))
-    .sort((a, b) => a.inningNumber - b.inningNumber);
+  return Array.from({ length: SCOREBOARD_INNINGS }, (_, i) => {
+    const inningNumber = i + 1;
+    const v = byInning.get(inningNumber);
+    if (v && v.outs >= 3) {
+      return { inningNumber, completed: true as const, delta: v.delta, goodCount: v.goodCount, totalAtBats: v.totalAtBats };
+    }
+    return { inningNumber, completed: false as const };
+  });
 }
 
 /** Compact "Bases: 1B ● | 2B ○ | 3B ●" visual so the user can see why LOB/runs were calculated. */
@@ -94,6 +110,7 @@ export default function Track() {
   const { data: entries, isLoading: entriesLoading } = useListEntries();
   const { data: inning, isLoading: inningLoading } = useGetCurrentInning();
   const createEntry = useCreateEntry();
+  const startNewGameMutation = useStartNewGame();
 
   const [notes, setNotes] = useState("");
   const [wizard, setWizard] = useState<WizardState>(emptyWizard);
@@ -210,7 +227,36 @@ export default function Track() {
   };
 
   const recentEntry = entries?.[0];
-  const completedInningTiles = computeCompletedInningTiles(entries);
+  const scoreboardSlots = computeScoreboardSlots(entries, inning?.gameId);
+
+  // Bumps the server-side game boundary (see startNewGame in psisStore.ts)
+  // and resets every piece of local Tracker UI state, so the page looks
+  // exactly like a brand-new game: wizard back to Outcome, notes cleared,
+  // no stale "waiting to start next inning" flag, and the inning/outs/
+  // delta/bases/completed-innings display (all derived from entries scoped
+  // to the current gameId) reads as empty the moment the query refetches.
+  const startNewGame = () => {
+    startNewGameMutation.mutate(undefined, {
+      onSuccess: () => {
+        resetForm();
+        setAcknowledgedInning(undefined);
+        queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
+        toast({
+          title: "New Game Started",
+          description: "Tracker reset — inning 1, 0 outs, bases empty.",
+        });
+      },
+      onError: () => {
+        toast({
+          title: "Error",
+          description: "Failed to start new game.",
+          variant: "destructive",
+        });
+      },
+    });
+  };
 
   const waitingForNextInning = !!inning?.completed && acknowledgedInning === inning.inningNumber;
   // Players left on base and the final delta are both computed server-side
@@ -230,7 +276,9 @@ export default function Track() {
   const recentLogEntries =
     !inning || showCompletedSummary || waitingForNextInning
       ? []
-      : (entries ?? []).filter(entry => entry.inningNumber === inning.inningNumber);
+      : (entries ?? []).filter(
+          entry => entry.inningNumber === inning.inningNumber && (entry.gameId ?? 1) === (inning.gameId ?? 1),
+        );
 
   return (
     <div className="grid lg:grid-cols-3 gap-8">
@@ -239,90 +287,96 @@ export default function Track() {
           <CardHeader className="bg-muted/50 pb-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <CardTitle className="uppercase tracking-wider">Log At-Bat Outcome</CardTitle>
-              {!inningLoading && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startNewGame}
+                disabled={startNewGameMutation.isPending}
+                data-testid="button-new-game"
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                New Game
+              </Button>
+            </div>
+            {!inningLoading && (
+              <div className="mt-3 space-y-2">
                 <div
-                  className="flex items-start gap-4 bg-card border rounded-sm px-4 py-3 flex-wrap"
+                  className="flex items-center divide-x border overflow-x-auto"
                   data-testid="game-status-panel"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Game Status</div>
+                  <div className="px-4 py-2 shrink-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Game Status</div>
+                  </div>
+                  <div className="px-4 py-2 text-center shrink-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
+                    <div className="font-mono font-bold text-lg" data-testid="text-inning-number">
+                      {displayInningNumber}
                     </div>
                   </div>
-                  <Separator orientation="vertical" className="h-10 hidden sm:block" />
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Inning</div>
-                      <div className="font-mono font-bold text-lg" data-testid="text-inning-number">
-                        {displayInningNumber}
-                      </div>
-                    </div>
-                    <Separator orientation="vertical" className="h-8" />
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
-                      <div className="flex items-center gap-1 font-mono font-bold text-lg" data-testid="text-inning-outs">
-                        {displayOuts} / 3
-                        <span className="flex gap-0.5 ml-1">
-                          {[0, 1, 2].map(i => (
-                            <Circle
-                              key={i}
-                              className={`w-2.5 h-2.5 ${i < displayOuts ? "fill-destructive text-destructive" : "text-muted-foreground/30"}`}
-                            />
-                          ))}
-                        </span>
-                      </div>
-                    </div>
-                    <Separator orientation="vertical" className="h-8" />
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Current Δ</div>
-                      <div
-                        className={`font-mono font-bold text-lg ${displayDelta > 0 ? "text-success" : displayDelta < 0 ? "text-destructive" : ""}`}
-                        data-testid="text-inning-delta"
-                      >
-                        {displayDelta > 0 ? "+" : ""}
-                        {displayDelta}
-                      </div>
-                    </div>
-                    <Separator orientation="vertical" className="h-8" />
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Bases</div>
-                      <BaseStateDisplay baseState={displayBaseState} />
+                  <div className="px-4 py-2 text-center shrink-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Outs</div>
+                    <div className="flex items-center gap-1 font-mono font-bold text-lg" data-testid="text-inning-outs">
+                      {displayOuts} / 3
+                      <span className="flex gap-0.5 ml-1">
+                        {[0, 1, 2].map(i => (
+                          <Circle
+                            key={i}
+                            className={`w-2.5 h-2.5 ${i < displayOuts ? "fill-destructive text-destructive" : "text-muted-foreground/30"}`}
+                          />
+                        ))}
+                      </span>
                     </div>
                   </div>
-                  {completedInningTiles.length > 0 && (
-                    <>
-                      <Separator orientation="vertical" className="h-10 hidden sm:block" />
-                      <div className="text-center sm:text-left" data-testid="completed-inning-deltas">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Completed</div>
-                        <div className="flex flex-wrap gap-2 max-w-sm">
-                          {completedInningTiles.map(({ inningNumber, delta, goodCount, totalAtBats }) => (
-                            <div
-                              key={inningNumber}
-                              className="flex flex-col items-center border rounded-sm px-2 py-1 bg-muted/30 leading-tight"
-                              data-testid={`completed-inning-tile-${inningNumber}`}
-                            >
-                              <span
-                                className={`font-mono font-bold text-sm ${delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : ""}`}
-                                data-testid={`completed-inning-delta-${inningNumber}`}
-                              >
-                                {delta > 0 ? "+" : ""}
-                                {delta}
-                              </span>
-                              <span className="font-mono text-[10px] text-muted-foreground">
-                                {goodCount}/{totalAtBats}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                Inn {inningNumber}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <div className="px-4 py-2 text-center shrink-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Current Δ</div>
+                    <div
+                      className={`font-mono font-bold text-lg ${displayDelta > 0 ? "text-success" : displayDelta < 0 ? "text-destructive" : ""}`}
+                      data-testid="text-inning-delta"
+                    >
+                      {displayDelta > 0 ? "+" : ""}
+                      {displayDelta}
+                    </div>
+                  </div>
+                  <div className="px-4 py-2 text-center shrink-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">LOB</div>
+                    <BaseStateDisplay baseState={displayBaseState} />
+                  </div>
                 </div>
-              )}
-            </div>
+                <div
+                  className="grid border overflow-hidden divide-x"
+                  style={{ gridTemplateColumns: `repeat(${SCOREBOARD_INNINGS}, minmax(0, 1fr))` }}
+                  data-testid="line-score-scoreboard"
+                >
+                  {scoreboardSlots.map(slot => (
+                    <div key={slot.inningNumber} className="flex flex-col divide-y" data-testid={`scoreboard-slot-${slot.inningNumber}`}>
+                      <div
+                        className={`text-center font-mono font-bold text-sm py-1 ${
+                          slot.completed
+                            ? slot.delta > 0
+                              ? "text-success"
+                              : slot.delta < 0
+                                ? "text-destructive"
+                                : "text-foreground"
+                            : "text-muted-foreground/30"
+                        }`}
+                        data-testid={`scoreboard-delta-${slot.inningNumber}`}
+                      >
+                        {slot.completed ? `${slot.delta > 0 ? "+" : ""}${slot.delta}` : ""}
+                      </div>
+                      <div
+                        className="text-center font-mono text-[10px] text-muted-foreground py-1"
+                        data-testid={`scoreboard-fraction-${slot.inningNumber}`}
+                      >
+                        {slot.completed ? `${slot.goodCount}/${slot.totalAtBats}` : ""}
+                      </div>
+                      <div className="text-center text-[10px] font-semibold text-muted-foreground py-1 bg-muted/40">
+                        {slot.inningNumber}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
             {showCompletedSummary && inning ? (

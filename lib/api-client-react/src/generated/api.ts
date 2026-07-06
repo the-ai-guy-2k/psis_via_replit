@@ -24,6 +24,7 @@ import type {
   DashboardSummary,
   Entry,
   ErrorResponse,
+  GameState,
   HealthStatus,
   InningState
 } from './api.schemas';
@@ -433,4 +434,74 @@ export function useGetCurrentInning<TData = Awaited<ReturnType<typeof getCurrent
 
 
 
+
+export const getStartNewGameUrl = () => {
+
+
+
+
+  return `/api/games/new`
+}
+
+/**
+ * @summary Start a brand-new game: bumps the current game boundary so the Tracker's inning/outs/delta/bases/completed-innings view resets to empty, without deleting historical entries (season dashboard aggregates are unaffected).
+ */
+export const startNewGame = async ( options?: RequestInit): Promise<GameState> => {
+
+  return customFetch<GameState>(getStartNewGameUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getStartNewGameMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNewGame>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startNewGame>>, TError,void, TContext> => {
+
+const mutationKey = ['startNewGame'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startNewGame>>, void> = () => {
+
+
+          return  startNewGame(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartNewGameMutationResult = NonNullable<Awaited<ReturnType<typeof startNewGame>>>
+
+    export type StartNewGameMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start a brand-new game: bumps the current game boundary so the Tracker's inning/outs/delta/bases/completed-innings view resets to empty, without deleting historical entries (season dashboard aggregates are unaffected).
+ */
+export const useStartNewGame = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNewGame>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startNewGame>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getStartNewGameMutationOptions(options));
+    }
 

@@ -2,3 +2,4 @@
 - [Artifact workflow naming](artifact-workflow-naming.md) — restart_workflow needs the exact name from listWorkflows(), not the artifact title or slug guess.
 - [Derived-state display vs mutation split](derived-state-display-vs-mutation.md) — a read-only "current state" endpoint must never auto-advance state as a side effect of being read; keep display and advance-on-write logic in separate functions.
 - [Neutralize-and-bake-in delta trick](neutralize-and-bake-in-delta-trick.md) — folding a new subtractive factor into per-entry `delta` (set good/bad to 0 for that entry) avoids special-casing aggregate formulas when they're just `sum(delta)`.
+- [Session-boundary reset pattern](session-boundary-reset-pattern.md) — for a "reset the live view but keep history" request, add a boundary id (gameId-style) instead of deleting/mutating stored rows.

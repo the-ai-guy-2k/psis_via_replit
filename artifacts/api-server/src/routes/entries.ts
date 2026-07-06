@@ -13,6 +13,7 @@ import {
   rawOutsForOutcome,
   resolveInningForNewAtBat,
   applyOutcomeToBaseState,
+  getCurrentGameId,
 } from "../lib/psisStore";
 
 const router: IRouter = Router();
@@ -82,7 +83,8 @@ router.post("/entries", async (req, res): Promise<void> => {
   const strikeoutCount = input.outcomeType === "strikeout" ? 1 : 0;
 
   const existingEntries = await listEntries();
-  const { inningNumber, currentOuts, baseState: baseStateBeforeAtBat } = resolveInningForNewAtBat(existingEntries);
+  const gameId = await getCurrentGameId();
+  const { inningNumber, currentOuts, baseState: baseStateBeforeAtBat } = resolveInningForNewAtBat(existingEntries, gameId);
 
   const { baseState: baseStateAfterAtBat, runsScored } = isRunScored
     ? { baseState: baseStateBeforeAtBat, runsScored: input.runsScored! }
@@ -114,6 +116,7 @@ router.post("/entries", async (req, res): Promise<void> => {
     runsScored,
     baseState: baseStateAfterAtBat,
     inningNumber,
+    gameId,
     outsAdded,
     playersLeftOnBase,
   };

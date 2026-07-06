@@ -43,6 +43,7 @@ export const ListEntriesResponseItem = zod.object({
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
   "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })
@@ -91,6 +92,7 @@ export const CreateEntryResponse = zod.object({
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
   "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })
@@ -123,6 +125,7 @@ export const GetDashboardResponse = zod.object({
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
   "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 })),
@@ -151,6 +154,7 @@ export const GetDashboardResponse = zod.object({
  */
 export const GetCurrentInningResponse = zod.object({
   "inningNumber": zod.number(),
+  "gameId": zod.number().describe('The current game boundary this inning state was computed against (see GameState\/New Game).'),
   "outs": zod.number().describe('Defensive outs recorded so far in this inning (0-3)'),
   "completed": zod.boolean().describe('True once outs reach 3'),
   "totalAtBats": zod.number(),
@@ -187,9 +191,18 @@ export const GetCurrentInningResponse = zod.object({
   "strikeoutCount": zod.number(),
   "delta": zod.number(),
   "inningNumber": zod.number().optional().describe('Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.'),
+  "gameId": zod.number().optional().describe('Which \"game\" (New Game boundary) this at-bat belongs to, server-assigned. Absent on entries created before New Game existed, which are treated as belonging to gameId 1. Used only to scope the Tracker\'s live view (current inning\/outs\/completed innings); season dashboard aggregates ignore it and include all games.'),
   "outsAdded": zod.number().optional().describe('Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.'),
   "notes": zod.string().optional()
 }))
 })
+
+
+/**
+ * @summary Start a brand-new game: bumps the current game boundary so the Tracker's inning/outs/delta/bases/completed-innings view resets to empty, without deleting historical entries (season dashboard aggregates are unaffected).
+ */
+export const StartNewGameResponse = zod.object({
+  "gameId": zod.number()
+}).describe('Identifies the currently active game. Bumped by \/games\/new; used to scope the Tracker\'s live view to only the current game\'s entries.')
 
 

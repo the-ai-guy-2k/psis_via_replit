@@ -11,6 +11,7 @@ export * from './createEntryInput';
 export * from './dashboardSummary';
 export * from './entry';
 export * from './errorResponse';
+export * from './gameState';
 export * from './handedness';
 export * from './healthStatus';
 export * from './inningState';

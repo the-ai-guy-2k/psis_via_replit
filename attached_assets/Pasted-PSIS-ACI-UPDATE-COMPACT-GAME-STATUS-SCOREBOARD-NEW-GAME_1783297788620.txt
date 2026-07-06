@@ -1,0 +1,395 @@
+PSIS ACI UPDATE — COMPACT GAME STATUS SCOREBOARD + NEW GAME RESET
+
+MISSION
+
+Update the PSIS Tracker Game Status panel to match the approved wireframe and add a New Game / Reset Game function.
+
+This ACI includes:
+
+1. Compact scoreboard layout for completed innings.
+2. LOB/base-state display in the Game Status panel.
+3. Reset logic that clears the tracker like a brand-new game.
+
+==================================================
+PART 1 — COMPACT GAME STATUS SCOREBOARD
+==================================================
+
+Redesign the Game Status panel to match the hand-drawn wireframe.
+
+Keep the top status bar compact.
+
+Display these sections horizontally:
+
+- GAME STATUS
+- INNING
+- OUTS
+- CURRENT Δ
+- LOB
+
+Example:
+
+GAME STATUS | INNING 5 | OUTS 2/3 | CURRENT Δ +1 | LOB 1B ● 2B ○ 3B ●
+
+==================================================
+COMPLETED INNINGS DISPLAY
+==================================================
+
+Replace the current completed inning cards with one compact horizontal scoreboard.
+
+There must be 9 inning boxes total.
+
+Each inning box should contain three stacked rows:
+
+Row 1:
+- Final inning delta
+
+Row 2:
+- EABR fraction
+
+Row 3:
+- Inning number
+
+Example:
+
+| +2 | -3 | +4 | -5 |    |    |    |    |    |
+|4/2 |2/5 |9/5 |4/9 |    |    |    |    |    |
+| 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9  |
+
+==================================================
+STYLE REQUIREMENTS
+==================================================
+
+The completed innings display should:
+
+- appear as one continuous scoreboard
+- use equal-width inning boxes
+- use shared borders
+- use compact spacing
+- center all values
+- avoid card styling
+- avoid shadows
+- avoid large gaps
+- resemble a baseball line score
+
+Positive delta = green
+Negative delta = red
+Zero delta = neutral
+
+==================================================
+EMPTY INNINGS
+==================================================
+
+Future innings should display as empty placeholders.
+
+For innings not completed yet:
+
+- Row 1 blank
+- Row 2 blank
+- Row 3 inning number
+
+==================================================
+PART 2 — NEW GAME / RESET GAME FUNCTION
+==================================================
+
+Add a New Game or Reset Game control to the Tracker.
+
+Button label:
+
+New Game
+
+or
+
+Reset Game
+
+Preferred label:
+
+New Game
+
+==================================================
+RESET BEHAVIOR
+==================================================
+
+When clicked, the app must reset the tracker to a brand-new game state.
+
+Reset:
+
+- current inning to 1
+- outs to 0
+- current inning delta to 0
+- good count to 0
+- bad count to 0
+- runs scored to 0
+- bases empty
+- active inning at-bats cleared
+- recent log cleared
+- completed inning summaries cleared
+- end inning panel hidden
+- wizard reset to Outcome
+- final delta display cleared
+
+The result should look like a fresh game has started.
+
+==================================================
+FUNCTIONS TO ADD / UPDATE
+==================================================
+
+Implement clear functions for reset logic.
+
+Suggested function names:
+
+resetCurrentAtBatWizard()
+resetCurrentInningState()
+resetCompletedInnings()
+resetBaseState()
+resetRecentLog()
+resetGameState()
+startNewGame()
+
+==================================================
+FUNCTION RESPONSIBILITIES
+==================================================
+
+resetCurrentAtBatWizard()
+
+Should reset only the progressive click flow:
+
+- selected category
+- selected outcome
+- selected detail
+- selected branch
+- pending EABR state
+
+--------------------------------------------------
+
+resetCurrentInningState()
+
+Should reset only active inning state:
+
+- outs = 0
+- goodCount = 0
+- badCount = 0
+- runsScored = 0
+- currentDelta = 0
+- activeInningAtBats = []
+- inningComplete = false
+- endInningPanelVisible = false
+
+--------------------------------------------------
+
+resetBaseState()
+
+Should clear all bases:
+
+- firstBase = false
+- secondBase = false
+- thirdBase = false
+
+--------------------------------------------------
+
+resetRecentLog()
+
+Should clear current inning recent entries:
+
+- recentLog = []
+
+--------------------------------------------------
+
+resetCompletedInnings()
+
+Should clear completed inning summaries:
+
+- completedInnings = []
+
+--------------------------------------------------
+
+resetGameState()
+
+Should call the needed reset functions and set:
+
+- currentInning = 1
+- gameStarted = true
+- gameComplete = false
+
+--------------------------------------------------
+
+startNewGame()
+
+Should be the handler used by the New Game button.
+
+It should call:
+
+resetGameState()
+
+==================================================
+PSEUDOCODE
+==================================================
+
+function resetCurrentAtBatWizard() {
+  clear selected outcome path
+  return wizard to Outcome
+}
+
+function resetCurrentInningState() {
+  outs = 0
+  goodCount = 0
+  badCount = 0
+  runsScored = 0
+  currentDelta = 0
+  activeInningAtBats = []
+  inningComplete = false
+  showEndInningPanel = false
+}
+
+function resetBaseState() {
+  firstBase = false
+  secondBase = false
+  thirdBase = false
+}
+
+function resetRecentLog() {
+  recentLog = []
+}
+
+function resetCompletedInnings() {
+  completedInnings = []
+}
+
+function resetGameState() {
+  currentInning = 1
+  resetCurrentAtBatWizard()
+  resetCurrentInningState()
+  resetBaseState()
+  resetRecentLog()
+  resetCompletedInnings()
+}
+
+function startNewGame() {
+  resetGameState()
+}
+
+==================================================
+IMPORTANT STORAGE NOTE
+==================================================
+
+If the app persists tracker state to local storage, JSON storage, or backend state:
+
+New Game must also clear or overwrite persisted active game state.
+
+Do not leave old completed innings in persisted state after reset.
+
+==================================================
+DO NOT CHANGE
+==================================================
+
+Do not modify:
+
+- EABR auto-save logic
+- outcome wizard branching
+- delta formula
+- base advancement logic
+- dashboard routes
+- backend APIs unless required for reset persistence
+
+This ACI is primarily UI layout + reset-state behavior.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. Game Status panel matches the compact wireframe.
+
+2. Completed innings display as one horizontal scoreboard.
+
+3. Nine inning boxes are always visible.
+
+4. Each completed inning box shows:
+   - delta
+   - EABR fraction
+   - inning number
+
+5. Empty future innings show blank delta/fraction rows and visible inning number.
+
+6. LOB/base-state appears in the Game Status panel.
+
+7. New Game or Reset Game button exists.
+
+8. Clicking New Game resets inning to 1.
+
+9. Clicking New Game clears outs to 0/3.
+
+10. Clicking New Game clears current delta to 0.
+
+11. Clicking New Game clears bases.
+
+12. Clicking New Game clears recent log.
+
+13. Clicking New Game clears completed innings.
+
+14. Clicking New Game resets wizard to Outcome.
+
+15. No old inning summary remains visible after reset.
+
+16. Tracker remains usable after reset.
+
+==================================================
+VALIDATION TESTS
+==================================================
+
+Test 1 — Scoreboard Layout
+
+Complete at least 2 innings.
+
+Expected:
+
+Completed innings display in compact horizontal scoreboard format.
+
+--------------------------------------------------
+
+Test 2 — Empty Innings
+
+After 2 completed innings:
+
+Expected:
+
+Innings 3 through 9 are visible as empty placeholders.
+
+--------------------------------------------------
+
+Test 3 — New Game Reset
+
+Click New Game.
+
+Expected:
+
+- inning = 1
+- outs = 0/3
+- current delta = 0
+- bases empty
+- recent log empty
+- completed innings empty
+- wizard shows Outcome
+
+--------------------------------------------------
+
+Test 4 — Tracker Still Works
+
+After reset, enter a new at-bat.
+
+Expected:
+
+At-bat saves normally and recent log updates.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- UI layout changes
+- Reset functions added
+- Persistence changes if any
+- Validation results
+- PASS / PARTIAL PASS / FAIL

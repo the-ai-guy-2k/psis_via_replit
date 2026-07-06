@@ -10,6 +10,8 @@ import type { Entry } from './entry';
 
 export interface InningState {
   inningNumber: number;
+  /** The current game boundary this inning state was computed against (see GameState/New Game). */
+  gameId: number;
   /** Defensive outs recorded so far in this inning (0-3) */
   outs: number;
   /** True once outs reach 3 */

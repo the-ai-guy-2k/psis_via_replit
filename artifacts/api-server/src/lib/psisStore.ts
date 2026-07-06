@@ -18,6 +18,7 @@ const workspaceRoot = process.cwd().endsWith(path.join("artifacts", "api-server"
 
 const dataDir = path.resolve(workspaceRoot, "artifacts/api-server/data");
 const dataFile = path.resolve(dataDir, "psis_entries.json");
+const gameStateFile = path.resolve(dataDir, "psis_game_state.json");
 
 export function resultCategoryFor(result: ResultOutcome): "good" | "bad" {
   return GOOD_RESULTS.includes(result) ? "good" : "bad";
@@ -60,6 +61,7 @@ export function rawOutsForOutcome(
 
 export interface InningState {
   inningNumber: number;
+  gameId: number;
   outs: number;
   completed: boolean;
   totalAtBats: number;
@@ -72,13 +74,64 @@ export interface InningState {
   atBats: Entry[];
 }
 
+interface GameStateFile {
+  currentGameId: number;
+}
+
+async function ensureGameStateFile(): Promise<void> {
+  await fs.mkdir(dataDir, { recursive: true });
+  try {
+    await fs.access(gameStateFile);
+  } catch {
+    await fs.writeFile(gameStateFile, JSON.stringify({ currentGameId: 1 }, null, 2) + "\n", "utf-8");
+  }
+}
+
+/**
+ * The current "game" boundary (bumped by New Game). Entries created before
+ * this concept existed have no `gameId` and are treated as belonging to
+ * game 1 (see `isEntryInGame`), so pre-existing data keeps showing normally
+ * until the first New Game click. Only the Tracker's live view is scoped by
+ * this — the season Dashboard intentionally ignores it and reads all
+ * entries across every game.
+ */
+export async function getCurrentGameId(): Promise<number> {
+  await ensureGameStateFile();
+  try {
+    const raw = await fs.readFile(gameStateFile, "utf-8");
+    const parsed = JSON.parse(raw) as GameStateFile;
+    return typeof parsed.currentGameId === "number" ? parsed.currentGameId : 1;
+  } catch (err) {
+    logger.error({ err }, "Failed to parse psis_game_state.json, defaulting to gameId 1");
+    return 1;
+  }
+}
+
+/**
+ * Starts a brand-new game by bumping the persisted game boundary. Does not
+ * touch `psis_entries.json` — historical at-bats stay intact for the season
+ * Dashboard, they just fall outside the new `currentGameId` so the Tracker's
+ * live view (inning/outs/delta/bases/completed innings) reads as empty.
+ */
+export async function startNewGame(): Promise<number> {
+  const currentGameId = await getCurrentGameId();
+  const nextGameId = currentGameId + 1;
+  await fs.writeFile(gameStateFile, JSON.stringify({ currentGameId: nextGameId }, null, 2) + "\n", "utf-8");
+  return nextGameId;
+}
+
+export function isEntryInGame(entry: Pick<Entry, "gameId">, gameId: number): boolean {
+  return (entry.gameId ?? 1) === gameId;
+}
+
 export function emptyBaseState(): BaseState {
   return { firstBase: false, secondBase: false, thirdBase: false };
 }
 
-function emptyInningState(inningNumber: number): InningState {
+function emptyInningState(inningNumber: number, gameId: number): InningState {
   return {
     inningNumber,
+    gameId,
     outs: 0,
     completed: false,
     totalAtBats: 0,
@@ -176,17 +229,18 @@ export function applyOutcomeToBaseState(
  * Returns the state of a specific inning, computed from stored entries — no
  * separate "current inning" record is persisted.
  */
-export function computeInningState(entries: Entry[], inningNumber: number): InningState {
+export function computeInningState(entries: Entry[], inningNumber: number, gameId: number): InningState {
   const atBats = entries
-    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber === inningNumber)
+    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber === inningNumber && isEntryInGame(e, gameId))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-  if (atBats.length === 0) return emptyInningState(inningNumber);
+  if (atBats.length === 0) return emptyInningState(inningNumber, gameId);
 
   const outs = atBats.reduce((sum, e) => sum + (e.outsAdded ?? 0), 0);
 
   return {
     inningNumber,
+    gameId,
     outs,
     completed: outs >= 3,
     totalAtBats: atBats.length,
@@ -206,26 +260,30 @@ export function computeInningState(entries: Entry[], inningNumber: number): Inni
  * inning tracking existed (no `inningNumber`) are ignored, so a fresh inning
  * 1 starts once the first inning-tracked at-bat is logged.
  */
-export function computeLatestInningState(entries: Entry[]): InningState {
+export function computeLatestInningState(entries: Entry[], gameId: number): InningState {
   const trackedInningNumbers = entries
-    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber !== undefined)
+    .filter((e): e is Entry & { inningNumber: number } => e.inningNumber !== undefined && isEntryInGame(e, gameId))
     .map(e => e.inningNumber);
 
-  if (trackedInningNumbers.length === 0) return emptyInningState(1);
+  if (trackedInningNumbers.length === 0) return emptyInningState(1, gameId);
 
   const latestInningNumber = Math.max(...trackedInningNumbers);
-  return computeInningState(entries, latestInningNumber);
+  return computeInningState(entries, latestInningNumber, gameId);
 }
 
 /**
  * Resolves which inning (and current out count / base state) a new at-bat
  * should be recorded against, auto-advancing past a just-completed inning.
- * Base state resets to empty at the start of a new inning.
+ * Base state resets to empty at the start of a new inning. Only considers
+ * entries belonging to the current game (see isEntryInGame) so a New Game
+ * always restarts numbering at inning 1 with empty bases, regardless of how
+ * far a previous game got.
  */
 export function resolveInningForNewAtBat(
   entries: Entry[],
+  gameId: number,
 ): { inningNumber: number; currentOuts: number; baseState: BaseState } {
-  const latest = computeLatestInningState(entries);
+  const latest = computeLatestInningState(entries, gameId);
   return latest.completed
     ? { inningNumber: latest.inningNumber + 1, currentOuts: 0, baseState: emptyBaseState() }
     : { inningNumber: latest.inningNumber, currentOuts: latest.outs, baseState: latest.baseState };

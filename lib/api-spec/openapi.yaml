@@ -16,6 +16,8 @@ tags:
     description: Dashboard aggregates
   - name: innings
     description: Inning-by-inning at-bat tracking
+  - name: games
+    description: Game lifecycle (New Game / Reset Game)
 paths:
   /healthz:
     get:
@@ -91,6 +93,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InningState"
+  /games/new:
+    post:
+      operationId: startNewGame
+      tags: [games]
+      summary: >-
+        Start a brand-new game: bumps the current game boundary so the
+        Tracker's inning/outs/delta/bases/completed-innings view resets to
+        empty, without deleting historical entries (season dashboard
+        aggregates are unaffected).
+      responses:
+        "200":
+          description: New game state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameState"
 components:
   schemas:
     HealthStatus:
@@ -202,6 +220,14 @@ components:
       required:
         - outcomeCategory
         - outcomeType
+    GameState:
+      type: object
+      description: Identifies the currently active game. Bumped by /games/new; used to scope the Tracker's live view to only the current game's entries.
+      properties:
+        gameId:
+          type: integer
+      required:
+        - gameId
     BaseState:
       type: object
       description: Runner occupancy on each base, tracked per-inning for the MVP base-state simulation (no steals/errors/tag-ups).
@@ -264,6 +290,15 @@ components:
         inningNumber:
           type: integer
           description: Which inning this at-bat belongs to, server-assigned. Absent on entries created before inning tracking existed.
+        gameId:
+          type: integer
+          description: >-
+            Which "game" (New Game boundary) this at-bat belongs to,
+            server-assigned. Absent on entries created before New Game
+            existed, which are treated as belonging to gameId 1. Used only to
+            scope the Tracker's live view (current inning/outs/completed
+            innings); season dashboard aggregates ignore it and include all
+            games.
         outsAdded:
           type: integer
           description: Defensive outs this at-bat contributed (0-3), server-computed and capped so the inning never exceeds 3 outs.
@@ -298,6 +333,9 @@ components:
       properties:
         inningNumber:
           type: integer
+        gameId:
+          type: integer
+          description: The current game boundary this inning state was computed against (see GameState/New Game).
         outs:
           type: integer
           description: Defensive outs recorded so far in this inning (0-3)
@@ -327,6 +365,7 @@ components:
             $ref: "#/components/schemas/Entry"
       required:
         - inningNumber
+        - gameId
         - outs
         - completed
         - totalAtBats
