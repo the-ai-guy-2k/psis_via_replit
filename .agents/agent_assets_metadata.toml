@@ -6,3 +6,15 @@ id = "qeTTjN8KxgUpwnZOUby1a"
 uri = "file://exports/psis-source-code.tar.gz"
 type = "unspecified"
 title = "PSIS Source Code"
+
+[[outputs]]
+id = "CHj3HX0j5iZB6CWOdYTmT"
+uri = "file://artifacts/psis/public/reports/PSIS_Test_Report.md"
+type = "text"
+title = "PSIS Test Report (Markdown)"
+
+[[outputs]]
+id = "ZriYPwrmV1ICV_SL7QQM5"
+uri = "file://artifacts/psis/public/reports/PSIS_Test_Report.json"
+type = "unspecified"
+title = "PSIS Test Report (JSON)"
