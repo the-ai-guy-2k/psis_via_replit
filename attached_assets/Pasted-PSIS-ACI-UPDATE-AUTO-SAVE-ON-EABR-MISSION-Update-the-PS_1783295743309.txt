@@ -1,0 +1,160 @@
+PSIS ACI UPDATE — AUTO-SAVE ON EABR
+
+MISSION
+
+Update the PSIS Tracker so the user does not need to click "Log PA Entry" after reaching an End of At-Bat Result.
+
+When the user selects a terminal EABR option, the app must automatically save the at-bat, update game state, reset the wizard, and wait for the next at-bat.
+
+==================================================
+CURRENT PROBLEM
+==================================================
+
+The current workflow requires an extra click after the outcome is already complete.
+
+Example:
+
+Outcome
+↓
+Defense
+↓
+Strikeout
+↓
+Log PA Entry
+
+This creates unnecessary friction.
+
+==================================================
+REQUIRED NEW FLOW
+==================================================
+
+Outcome
+↓
+Defense / Offense
+↓
+Specific branch
+↓
+EABR reached
+↓
+AUTO SAVE
+↓
+Update game state
+↓
+Reset wizard to Outcome
+↓
+Wait for next at-bat
+
+==================================================
+TERMINAL EABR STATES
+==================================================
+
+The following selections must immediately save the at-bat:
+
+DEFENSE
+
+- Strikeout
+- Fly Out after field/location is selected
+- Ground Out → Single Play
+- Ground Out → Double Play
+- Ground Out → Triple Play
+
+OFFENSE
+
+- Walk
+- Hit → Single
+- Hit → Double
+- Hit → Triple
+- Hit → Home Run
+
+==================================================
+REMOVE / DISABLE
+==================================================
+
+Remove or hide the button:
+
+"Log PA Entry"
+
+The user should not be asked to manually submit once an EABR is reached.
+
+==================================================
+AUTO-SAVE LOGIC
+==================================================
+
+When EABR is reached:
+
+1. Build the at-bat entry object.
+2. Save the at-bat to the active inning.
+3. Update outs.
+4. Update base state.
+5. Update runs scored.
+6. Update current inning delta.
+7. Add entry to Recent Log.
+8. Check if outs = 3.
+9. If outs < 3, reset wizard to Outcome.
+10. If outs = 3, show End Inning panel.
+
+==================================================
+INNING END RULE
+==================================================
+
+If the auto-saved EABR causes outs to reach 3:
+
+- Do not reset directly to Outcome.
+- Stop at-bat entry.
+- Show End Inning panel.
+- Calculate/display final delta only after End Inning is clicked.
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+PASS requires:
+
+1. "Log PA Entry" is no longer required.
+
+2. Selecting Strikeout auto-saves the at-bat.
+
+3. Selecting Walk auto-saves the at-bat.
+
+4. Selecting Hit → Single/Double/Triple/Home Run auto-saves.
+
+5. Selecting Ground Out → Single/Double/Triple Play auto-saves.
+
+6. Fly Out auto-saves only after required location/detail is selected.
+
+7. Recent Log updates after auto-save.
+
+8. Wizard resets to Outcome after auto-save when inning is not over.
+
+9. If auto-save reaches 3 outs, End Inning panel appears.
+
+10. Final inning delta still calculates only after End Inning.
+
+11. Dashboard/stat logic does not crash.
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Do not add:
+
+- Authentication
+- AI
+- Player database
+- Full scorebook
+- Advanced runner simulation
+- Deployment changes
+
+This update is only for auto-saving at-bats when EABR is reached.
+
+==================================================
+REPORT BACK
+==================================================
+
+After implementation, report:
+
+- Files changed
+- EABR auto-save logic added
+- UI elements removed/hidden
+- Validation results
+- PASS / PARTIAL PASS / FAIL

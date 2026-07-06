@@ -812,5 +812,103 @@
     "inningNumber": 13,
     "outsAdded": 1,
     "playersLeftOnBase": 0
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "33c69b59-8a02-4e08-9651-23cbb35dbecf",
+    "createdAt": "2026-07-05T23:59:58.733Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 14,
+    "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "offense",
+    "outcomeType": "walk",
+    "id": "8e38733c-2cb2-4c8a-9b2f-412a3f0b5128",
+    "createdAt": "2026-07-06T00:00:16.641Z",
+    "resultCategory": "bad",
+    "goodCount": 0,
+    "badCount": 1,
+    "strikeoutCount": 0,
+    "delta": -1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": true,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 14,
+    "outsAdded": 0
+  },
+  {
+    "outcomeCategory": "offense",
+    "outcomeType": "hit",
+    "outcomeDetail": "home_run",
+    "id": "7a66bbff-c8b2-4eca-9250-69f9949aa058",
+    "createdAt": "2026-07-06T00:00:41.018Z",
+    "resultCategory": "bad",
+    "goodCount": 0,
+    "badCount": 1,
+    "strikeoutCount": 0,
+    "delta": -3,
+    "runsScored": 2,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 14,
+    "outsAdded": 0
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "fly_out",
+    "outcomeDetail": "infield",
+    "id": "575101b3-edfb-4487-a981-5853dc793ea7",
+    "createdAt": "2026-07-06T00:01:05.346Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 0,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 14,
+    "outsAdded": 1
+  },
+  {
+    "outcomeCategory": "defense",
+    "outcomeType": "strikeout",
+    "id": "83f1640b-19e2-4808-95c9-21db27921aab",
+    "createdAt": "2026-07-06T00:01:24.243Z",
+    "resultCategory": "good",
+    "goodCount": 1,
+    "badCount": 0,
+    "strikeoutCount": 1,
+    "delta": 1,
+    "runsScored": 0,
+    "baseState": {
+      "firstBase": false,
+      "secondBase": false,
+      "thirdBase": false
+    },
+    "inningNumber": 14,
+    "outsAdded": 1,
+    "playersLeftOnBase": 0
   }
 ]

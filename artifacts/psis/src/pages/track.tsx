@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateEntry,
@@ -114,23 +114,27 @@ export default function Track() {
   };
 
   const selectOutcomeType = (type: OutcomeType) => {
-    setWizard(prev => ({
-      started: true,
-      outcomeCategory: prev.outcomeCategory,
-      outcomeType: type,
-    }));
+    const next: WizardState = { started: true, outcomeCategory: wizard.outcomeCategory, outcomeType: type };
+    setWizard(next);
+    // No follow-up click needed for this type (e.g. strikeout, walk) — the
+    // EABR is reached the instant it's clicked, so auto-save immediately.
+    if (!detailOptionsForOutcomeType(type)) {
+      autoSave(next);
+    }
   };
 
   const selectOutcomeDetail = (detail: OutcomeDetail) => {
-    setWizard(prev => ({ ...prev, outcomeDetail: detail }));
+    const next: WizardState = { ...wizard, outcomeDetail: detail };
+    setWizard(next);
+    // Selecting the follow-up detail (catch location / play result / hit
+    // type) is always the EABR for these branches — auto-save immediately.
+    autoSave(next);
   };
 
   // Reached only once every required click in the path has been made — the
   // "EABR" (End of At-Bat Result). Nothing is ever saved before this.
   const isEabrReached =
     !!wizard.outcomeCategory && !!wizard.outcomeType && (!needsDetail || !!wizard.outcomeDetail);
-
-  const isFormComplete = isEabrReached;
 
   const resetForm = () => {
     setNotes("");
@@ -157,17 +161,26 @@ export default function Track() {
   if (wizard.outcomeType) breadcrumb.push(labelForOutcomeValue(wizard.outcomeType));
   if (wizard.outcomeDetail) breadcrumb.push(labelForOutcomeValue(wizard.outcomeDetail));
 
-  const onSubmit = () => {
-    if (!isFormComplete || !wizard.outcomeCategory || !wizard.outcomeType) {
-      return;
-    }
+  // Guards against a double auto-save from a stray double-click or a rapid
+  // repeat call before the mutation settles — auto-save should fire exactly
+  // once per EABR.
+  const autoSaveInFlightRef = useRef(false);
+
+  // Fires the instant an EABR (End of At-Bat Result) is reached — the user
+  // never has to click a submit button. Takes the just-computed wizard
+  // state explicitly (rather than reading component state) so it always
+  // saves the outcome that was just clicked, not a stale value.
+  const autoSave = (finalWizard: WizardState) => {
+    if (!finalWizard.outcomeCategory || !finalWizard.outcomeType) return;
+    if (autoSaveInFlightRef.current) return;
+    autoSaveInFlightRef.current = true;
 
     createEntry.mutate(
       {
         data: {
-          outcomeCategory: wizard.outcomeCategory,
-          outcomeType: wizard.outcomeType,
-          outcomeDetail: wizard.outcomeDetail,
+          outcomeCategory: finalWizard.outcomeCategory,
+          outcomeType: finalWizard.outcomeType,
+          outcomeDetail: finalWizard.outcomeDetail,
           notes: notes || undefined,
         },
       },
@@ -175,13 +188,14 @@ export default function Track() {
         onSuccess: () => {
           toast({
             title: "Entry Logged",
-            description: "At-bat outcome recorded successfully.",
+            description: "At-bat outcome recorded automatically.",
           });
           resetForm();
           setAcknowledgedInning(undefined);
           queryClient.invalidateQueries({ queryKey: getListEntriesQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetCurrentInningQueryKey() });
+          autoSaveInFlightRef.current = false;
         },
         onError: () => {
           toast({
@@ -189,6 +203,7 @@ export default function Track() {
             description: "Failed to log entry.",
             variant: "destructive",
           });
+          autoSaveInFlightRef.current = false;
         },
       },
     );
@@ -429,6 +444,22 @@ export default function Track() {
                   </button>
                 )}
 
+                {wizard.started && (
+                  <div className="space-y-2">
+                    <Label>Notes (Optional)</Label>
+                    <Textarea
+                      placeholder="Any mechanical or situational observations..."
+                      className="resize-none rounded-sm"
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      data-testid="input-notes"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Add notes before selecting the outcome — the at-bat saves automatically the moment an outcome is reached.
+                    </p>
+                  </div>
+                )}
+
                 {wizard.started && !wizard.outcomeCategory && (
                   <div className="space-y-2">
                     <Label className="uppercase tracking-wider text-xs text-muted-foreground">Defense or Offense?</Label>
@@ -504,27 +535,9 @@ export default function Track() {
                 {isEabrReached && (
                   <>
                     <Separator />
-
-                    <div className="space-y-2">
-                      <Label>Notes (Optional)</Label>
-                      <Textarea
-                        placeholder="Any mechanical or situational observations..."
-                        className="resize-none rounded-sm"
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        data-testid="input-notes"
-                      />
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-auto-saving">
+                      {createEntry.isPending ? "Saving at-bat..." : "Saved."}
                     </div>
-
-                    <Button
-                      type="button"
-                      onClick={onSubmit}
-                      className="w-full rounded-none font-bold uppercase tracking-wider"
-                      disabled={!isFormComplete || createEntry.isPending}
-                      data-testid="btn-submit-entry"
-                    >
-                      {createEntry.isPending ? "Logging..." : "Log PA Entry"}
-                    </Button>
                   </>
                 )}
               </>
