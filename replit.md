@@ -91,3 +91,7 @@ _None recorded yet._
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+
+## Change log
+
+- 2026-07-06: connected project to GitHub for source control.
