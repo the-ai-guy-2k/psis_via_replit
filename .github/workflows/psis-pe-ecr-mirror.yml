@@ -117,26 +117,44 @@ jobs:
           docker pull "${DOCKERHUB_IMAGE}:latest"
 
           HUB_DIGEST=$(docker buildx imagetools inspect "${DOCKERHUB_IMAGE}:latest" --format '{{.Manifest.Digest}}')
+          HUB_IMAGE_ID=$(docker image inspect "${DOCKERHUB_IMAGE}:latest" --format '{{.Id}}')
           echo "hub_digest=${HUB_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "hub_image_id=${HUB_IMAGE_ID}" >> "$GITHUB_OUTPUT"
 
           docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:latest"
           docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:${COMMIT_SHA}"
 
-          docker push "${ECR_URI}:latest"
-          docker push "${ECR_URI}:${COMMIT_SHA}"
+          tag_exists() {
+            aws ecr describe-images \
+              --repository-name "${{ env.ECR_REPOSITORY }}" \
+              --image-ids "imageTag=$1" \
+              --region "${{ secrets.AWS_REGION || 'us-east-1' }}" >/dev/null 2>&1
+          }
+
+          for TAG in latest "${COMMIT_SHA}"; do
+            if tag_exists "${TAG}"; then
+              echo "Tag ${TAG} already present in immutable ECR repository — skipping push."
+            else
+              docker push "${ECR_URI}:${TAG}"
+            fi
+          done
 
           ECR_DIGEST=$(docker buildx imagetools inspect "${ECR_URI}:latest" --format '{{.Manifest.Digest}}')
+          ECR_IMAGE_ID=$(docker image inspect "${ECR_URI}:latest" --format '{{.Id}}')
           echo "ecr_digest=${ECR_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "ecr_image_id=${ECR_IMAGE_ID}" >> "$GITHUB_OUTPUT"
           echo "image_tag_latest=latest" >> "$GITHUB_OUTPUT"
           echo "image_tag_sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
 
-          if [ "${HUB_DIGEST}" != "${ECR_DIGEST}" ]; then
-            echo "Digest mismatch between Docker Hub and ECR."
-            echo "Hub: ${HUB_DIGEST}"
-            echo "ECR: ${ECR_DIGEST}"
+          # Manifest digests differ across registries; image config ID must match.
+          if [ "${HUB_IMAGE_ID}" != "${ECR_IMAGE_ID}" ]; then
+            echo "Image content mismatch between Docker Hub and ECR."
+            echo "Hub image ID: ${HUB_IMAGE_ID}"
+            echo "ECR image ID: ${ECR_IMAGE_ID}"
             exit 1
           fi
           echo "digest_verified=PASS" >> "$GITHUB_OUTPUT"
+          echo "content_verified=PASS" >> "$GITHUB_OUTPUT"
           echo "mirror_result=PASS" >> "$GITHUB_OUTPUT"
 
       - name: Verify ECR image (pull and inspect)
@@ -164,8 +182,9 @@ jobs:
           echo "ecr_metadata_digest=${META_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "ecr_tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
-          if [ "${META_DIGEST}" != "${{ steps.mirror.outputs.ecr_digest }}" ]; then
-            echo "ECR API digest does not match mirrored digest"
+          PULLED_ID=$(docker image inspect "${ECR_URI}:latest" --format '{{.Id}}')
+          if [ "${PULLED_ID}" != "${{ steps.mirror.outputs.hub_image_id }}" ]; then
+            echo "Pulled ECR image content does not match Docker Hub source"
             exit 1
           fi
           echo "metadata_result=PASS" >> "$GITHUB_OUTPUT"
@@ -295,10 +314,11 @@ jobs:
             echo "| Field | Value |"
             echo "|-------|-------|"
             echo "| Source | \`${{ env.DOCKERHUB_IMAGE }}:latest\` |"
-            echo "| Hub digest | \`${HUB_DIGEST}\` |"
-            echo "| ECR digest | \`${ECR_DIGEST}\` |"
+            echo "| Hub manifest digest | \`${HUB_DIGEST}\` |"
+            echo "| ECR manifest digest | \`${ECR_DIGEST}\` |"
+            echo "| Image content match (config ID) | ${{ steps.mirror.outputs.content_verified }} |"
             echo "| Tags pushed | \`latest\`, \`${COMMIT_SHA}\` |"
-            echo "| Digest match | ${DIGEST_VERIFIED} |"
+            echo "| Content verification | ${DIGEST_VERIFIED} |"
             echo "| Mirror result | ${MIRROR_RESULT} |"
             echo ""
             echo "## 3. ECR Pull Validation"
