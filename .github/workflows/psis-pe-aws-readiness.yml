@@ -1,0 +1,250 @@
+name: PSIS PE AWS Readiness
+
+# Read-only AWS readiness validation for ACI-PE-001 and follow-on PE ACIs.
+# Does not create App Runner, ECS, ECR repositories, or other production resources.
+
+on:
+  workflow_dispatch:
+
+env:
+  PREFERRED_REGION: us-east-1
+  IMAGE_NAME: taig2k/pitching_sequence_intellegence_system_psis
+
+jobs:
+  aws-readiness:
+    name: AWS PE Readiness (read-only)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check GitHub secrets presence (names only)
+        id: secrets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          report() { key="$1"; val="$2"; if [ -n "$val" ]; then echo "${key}=present" >> "$GITHUB_OUTPUT"; else echo "${key}=missing" >> "$GITHUB_OUTPUT"; fi; }
+          report dockerhub_username "$DOCKERHUB_USERNAME"
+          report dockerhub_token "$DOCKERHUB_TOKEN"
+          report aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          report aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          report aws_region "$AWS_REGION"
+
+          if [ -n "$AWS_REGION" ]; then
+            echo "resolved_region=${AWS_REGION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "resolved_region=${PREFERRED_REGION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.secrets.outputs.aws_access_key_id == 'present' && steps.secrets.outputs.aws_secret_access_key == 'present'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.secrets.outputs.resolved_region }}
+
+      - name: Verify AWS identity
+        id: identity
+        if: steps.secrets.outputs.aws_access_key_id == 'present' && steps.secrets.outputs.aws_secret_access_key == 'present'
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity > identity.json
+          echo "account_id=$(jq -r .Account identity.json)" >> "$GITHUB_OUTPUT"
+          echo "arn=$(jq -r .Arn identity.json)" >> "$GITHUB_OUTPUT"
+          echo "user_id=$(jq -r .UserId identity.json)" >> "$GITHUB_OUTPUT"
+          echo "result=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: App Runner read-only checks
+        id: apprunner
+        if: steps.secrets.outputs.aws_access_key_id == 'present' && steps.secrets.outputs.aws_secret_access_key == 'present'
+        env:
+          AWS_REGION: ${{ steps.secrets.outputs.resolved_region }}
+        run: |
+          set +e
+          aws apprunner list-services --region "$AWS_REGION" > apprunner-list.json 2>apprunner-list.err
+          list_rc=$?
+
+          aws iam get-role --role-name AWSServiceRoleForAppRunner  > apprunner-slrc.json 2>apprunner-slrc.err
+          slrc_rc=$?
+
+          if [ $list_rc -eq 0 ]; then
+            echo "list_services=PASS" >> "$GITHUB_OUTPUT"
+            count=$(jq '.ServiceSummaryList | length' apprunner-list.json)
+            echo "service_count=${count}" >> "$GITHUB_OUTPUT"
+          else
+            echo "list_services=FAIL" >> "$GITHUB_OUTPUT"
+            echo "list_error<<EOF" >> "$GITHUB_OUTPUT"
+            head -c 500 apprunner-list.err >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ $slrc_rc -eq 0 ]; then
+            echo "service_linked_role=present" >> "$GITHUB_OUTPUT"
+          else
+            echo "service_linked_role=unknown_or_missing" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "availability_note=App Runner closed to new customers per AWS (2026). Existing accounts may list services; new PSIS PE should use ECS Express Mode." >> "$GITHUB_OUTPUT"
+
+      - name: IAM permission probes (read-only)
+        id: iam
+        if: steps.secrets.outputs.aws_access_key_id == 'present' && steps.secrets.outputs.aws_secret_access_key == 'present'
+        env:
+          AWS_REGION: ${{ steps.secrets.outputs.resolved_region }}
+        run: |
+          set +e
+          probe() { svc="$1"; shift; aws "$svc" "$@" >/dev/null 2>"${svc}.err"; echo "${svc}=$?"; }
+
+          ecr_rc=$(aws ecr describe-repositories --max-results 1 --region "$AWS_REGION" >/dev/null 2>&1; echo $?)
+          logs_rc=$(aws logs describe-log-groups --limit 1 --region "$AWS_REGION" >/dev/null 2>&1; echo $?)
+          ecs_rc=$(aws ecs list-clusters --max-results 1 --region "$AWS_REGION" >/dev/null 2>&1; echo $?)
+          iam_rc=$(aws iam get-user >/dev/null 2>&1; echo $?)
+          if [ "$iam_rc" -ne 0 ]; then
+            iam_rc=$(aws iam get-role --role-name ecsTaskExecutionRole >/dev/null 2>&1; echo $?)
+            iam_subject="role_ecsTaskExecutionRole"
+          else
+            iam_subject="current_user"
+          fi
+
+          echo "ecr_describe=$([ "$ecr_rc" -eq 0 ] && echo PASS || echo UNKNOWN)" >> "$GITHUB_OUTPUT"
+          echo "cloudwatch_logs=$([ "$logs_rc" -eq 0 ] && echo PASS || echo UNKNOWN)" >> "$GITHUB_OUTPUT"
+          echo "ecs_list=$([ "$ecs_rc" -eq 0 ] && echo PASS || echo UNKNOWN)" >> "$GITHUB_OUTPUT"
+          echo "iam_read=$([ "$iam_rc" -eq 0 ] && echo PASS || echo UNKNOWN)" >> "$GITHUB_OUTPUT"
+          echo "iam_subject=${iam_subject:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "pass_role=UNKNOWN" >> "$GITHUB_OUTPUT"
+          echo "efs=UNKNOWN" >> "$GITHUB_OUTPUT"
+          echo "note=Create-time permissions (apprunner:CreateService, ecs:CreateExpressGatewayService, iam:PassRole) cannot be confirmed without resource creation." >> "$GITHUB_OUTPUT"
+
+      - name: Generate readiness report
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESOLVED_REGION: ${{ steps.secrets.outputs.resolved_region }}
+          DOCKERHUB_USERNAME: ${{ steps.secrets.outputs.dockerhub_username }}
+          DOCKERHUB_TOKEN: ${{ steps.secrets.outputs.dockerhub_token }}
+          AWS_ACCESS_KEY_ID: ${{ steps.secrets.outputs.aws_access_key_id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.secrets.outputs.aws_secret_access_key }}
+          AWS_REGION_SECRET: ${{ steps.secrets.outputs.aws_region }}
+          IDENTITY_RESULT: ${{ steps.identity.outputs.result }}
+          ACCOUNT_ID: ${{ steps.identity.outputs.account_id }}
+          IDENTITY_ARN: ${{ steps.identity.outputs.arn }}
+          APPRUNNER_LIST: ${{ steps.apprunner.outputs.list_services }}
+          APPRUNNER_SLRC: ${{ steps.apprunner.outputs.service_linked_role }}
+          APPRUNNER_NOTE: ${{ steps.apprunner.outputs.availability_note }}
+          ECR_PROBE: ${{ steps.iam.outputs.ecr_describe }}
+          LOGS_PROBE: ${{ steps.iam.outputs.cloudwatch_logs }}
+          ECS_PROBE: ${{ steps.iam.outputs.ecs_list }}
+          IAM_PROBE: ${{ steps.iam.outputs.iam_read }}
+          IAM_NOTE: ${{ steps.iam.outputs.note }}
+        run: |
+          mkdir -p docs/reports
+          {
+            echo "# ACI-PE-001 — PSIS AWS Readiness Report"
+            echo ""
+            echo "**Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            echo "**Workflow run:** ${RUN_URL}"
+            echo "**Commit:** \`${{ github.sha }}\`"
+            echo ""
+            echo "## 1. GitHub Secrets Status"
+            echo ""
+            echo "| Secret | Status |"
+            echo "|--------|--------|"
+            echo "| DOCKERHUB_USERNAME | ${DOCKERHUB_USERNAME} |"
+            echo "| DOCKERHUB_TOKEN | ${DOCKERHUB_TOKEN} |"
+            echo "| AWS_ACCESS_KEY_ID | ${AWS_ACCESS_KEY_ID} |"
+            echo "| AWS_SECRET_ACCESS_KEY | ${AWS_SECRET_ACCESS_KEY} |"
+            echo "| AWS_REGION | ${AWS_REGION_SECRET} |"
+            echo ""
+            echo "**Resolved AWS region for probes:** \`${RESOLVED_REGION}\` (uses secret if set, else \`us-east-1\`)"
+            echo ""
+            echo "## 2. AWS Identity (\`aws sts get-caller-identity\`)"
+            echo ""
+            if [ "${IDENTITY_RESULT}" = "PASS" ]; then
+              echo "| Field | Value |"
+              echo "|-------|-------|"
+              echo "| Account ID | \`${ACCOUNT_ID}\` |"
+              echo "| ARN | \`${IDENTITY_ARN}\` |"
+              echo "| Region | \`${RESOLVED_REGION}\` |"
+            else
+              echo "**Not verified** — AWS credentials missing or invalid."
+            fi
+            echo ""
+            echo "## 3. App Runner Readiness (read-only)"
+            echo ""
+            if [ -n "${APPRUNNER_LIST}" ]; then
+              echo "| Check | Result |"
+              echo "|-------|--------|"
+              echo "| list-services | ${APPRUNNER_LIST} |"
+              echo "| Service-linked role | ${APPRUNNER_SLRC} |"
+              echo ""
+              echo "**Policy note:** ${APPRUNNER_NOTE}"
+            else
+              echo "Not probed — AWS credentials unavailable."
+            fi
+            echo ""
+            echo "## 4. IAM Permission Probes (read-only)"
+            echo ""
+            if [ -n "${ECR_PROBE}" ]; then
+              echo "| Capability | Probe result |"
+              echo "|------------|--------------|"
+              echo "| ECR describe-repositories | ${ECR_PROBE} |"
+              echo "| CloudWatch Logs list | ${LOGS_PROBE} |"
+              echo "| ECS list-clusters | ${ECS_PROBE} |"
+              echo "| IAM read (user/role) | ${IAM_PROBE} |"
+              echo ""
+              echo "${IAM_NOTE}"
+            else
+              echo "Not probed — AWS credentials unavailable."
+            fi
+            echo ""
+            echo "## 5. Deployment Path Options"
+            echo ""
+            echo "| Option | Description | PSIS PE fit (Jul 2026) |"
+            echo "|--------|-------------|------------------------|"
+            echo "| A | App Runner from Docker Hub | **Not recommended** — App Runner closed to new customers; image source typically ECR |"
+            echo "| B | Mirror Hub → ECR, deploy via ECS Express Mode | **Recommended** — lowest friction aligned with AWS guidance |"
+            echo "| C | ECS Fargate (full control) | Valid if Express Mode insufficient (EFS, custom networking) |"
+            echo ""
+            echo "**Recommendation:** Option B — extend GitHub Actions to push \`${IMAGE_NAME}\` to ECR, deploy with **ECS Express Mode** (health check \`GET /api/healthz\`, port 8080)."
+            echo ""
+            echo "## 6. Known Blockers"
+            echo ""
+            if [ "${AWS_ACCESS_KEY_ID}" != "present" ] || [ "${AWS_SECRET_ACCESS_KEY}" != "present" ]; then
+              echo "- AWS GitHub secrets missing — PE deployment cannot be validated or executed from CI."
+            fi
+            if [ "${AWS_REGION_SECRET}" != "present" ]; then
+              echo "- AWS_REGION secret not set — will default to \`us-east-1\` in workflows; set explicitly for clarity."
+            fi
+            echo "- App Runner not available for **new** PSIS PE tenants (AWS maintenance / closed to new customers)."
+            echo "- JSON persistence on EFS not validated in this ACI — separate PE persistence ACI required."
+            echo ""
+            echo "## 7. Operator Actions"
+            echo ""
+            echo "1. Add missing GitHub secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)."
+            echo "2. Re-run this workflow (\`PSIS PE AWS Readiness\`) via Actions → workflow_dispatch."
+            echo "3. Plan PE on **ECS Express Mode + ECR**, not new App Runner."
+            echo "4. Ensure IAM principal can ECR push/pull, ECS Express create, CloudWatch Logs, and iam:PassRole for ECS roles."
+            echo ""
+            echo "## 8. Final Status"
+            echo ""
+            if [ "${IDENTITY_RESULT}" = "PASS" ] && [ "${AWS_ACCESS_KEY_ID}" = "present" ] && [ "${AWS_SECRET_ACCESS_KEY}" = "present" ]; then
+              echo "**PASS** (AWS identity verified; App Runner not recommended for new deployment)"
+            elif [ "${AWS_ACCESS_KEY_ID}" != "present" ] || [ "${AWS_SECRET_ACCESS_KEY}" != "present" ]; then
+              echo "**PARTIAL PASS** — findings documented; AWS credentials not configured in GitHub secrets."
+            else
+              echo "**PARTIAL PASS** — AWS credentials present but identity verification failed."
+            fi
+          } > docs/reports/ACI_PE_001_AWS_Readiness_Report.md
+
+      - name: Upload readiness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACI_PE_001_AWS_Readiness
+          path: docs/reports/ACI_PE_001_AWS_Readiness_Report.md
+          retention-days: 90
