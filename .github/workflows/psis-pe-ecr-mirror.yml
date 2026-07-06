@@ -118,8 +118,14 @@ jobs:
 
           HUB_DIGEST=$(docker buildx imagetools inspect "${DOCKERHUB_IMAGE}:latest" --format '{{.Manifest.Digest}}')
           HUB_IMAGE_ID=$(docker image inspect "${DOCKERHUB_IMAGE}:latest" --format '{{.Id}}')
+          HUB_LAYERS=$(docker image inspect "${DOCKERHUB_IMAGE}:latest" --format '{{json .RootFS.Layers}}')
           echo "hub_digest=${HUB_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "hub_image_id=${HUB_IMAGE_ID}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'hub_layers<<EOF'
+            echo "${HUB_LAYERS}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
           docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:latest"
           docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:${COMMIT_SHA}"
@@ -131,9 +137,20 @@ jobs:
               --region "${{ secrets.AWS_REGION || 'us-east-1' }}" >/dev/null 2>&1
           }
 
+          ecr_layers_match_hub() {
+            docker pull "${ECR_URI}:$1" >/dev/null
+            ECR_LAYERS=$(docker image inspect "${ECR_URI}:$1" --format '{{json .RootFS.Layers}}')
+            [ "${ECR_LAYERS}" = "${HUB_LAYERS}" ]
+          }
+
           for TAG in latest "${COMMIT_SHA}"; do
             if tag_exists "${TAG}"; then
-              echo "Tag ${TAG} already present in immutable ECR repository — skipping push."
+              if ecr_layers_match_hub "${TAG}"; then
+                echo "Tag ${TAG} already present with matching content — skipping push."
+              else
+                echo "Immutable tag ${TAG} exists but registry content differs from Docker Hub."
+                exit 1
+              fi
             else
               docker push "${ECR_URI}:${TAG}"
             fi
@@ -164,7 +181,7 @@ jobs:
           ECR_URI: ${{ steps.ecr_meta.outputs.ecr_uri }}
           COMMIT_SHA: ${{ github.sha }}
           MIRROR_ECR_DIGEST: ${{ steps.mirror.outputs.ecr_digest }}
-          HUB_IMAGE_ID: ${{ steps.mirror.outputs.hub_image_id }}
+          HUB_LAYERS: ${{ steps.mirror.outputs.hub_layers }}
         run: |
           set -euo pipefail
 
@@ -194,11 +211,9 @@ jobs:
           fi
           echo "digest_result=PASS" >> "$GITHUB_OUTPUT"
 
-          # docker image .Id differs after registry pull (manifest vs config); compare layer stack.
-          docker pull "${DOCKERHUB_IMAGE}:latest" >/dev/null
-          HUB_LAYERS=$(docker image inspect "${DOCKERHUB_IMAGE}:latest" --format '{{json .RootFS.Layers}}')
+          # Compare layer stack to hub snapshot from mirror step (not a fresh hub pull).
           PULLED_LAYERS=$(docker image inspect "${ECR_URI}:latest" --format '{{json .RootFS.Layers}}')
-          if [ "${HUB_LAYERS}" != "${PULLED_LAYERS}" ]; then
+          if [ "${PULLED_LAYERS}" != "${HUB_LAYERS}" ]; then
             echo "Pulled ECR image layers do not match Docker Hub source"
             exit 1
           fi
