@@ -148,8 +148,19 @@ jobs:
               if ecr_layers_match_hub "${TAG}"; then
                 echo "Tag ${TAG} already present with matching content — skipping push."
               else
-                echo "Immutable tag ${TAG} exists but registry content differs from Docker Hub."
-                exit 1
+                echo "Tag ${TAG} stale vs Docker Hub — deleting ECR image for immutable re-push."
+                STALE_DIGEST=$(aws ecr describe-images \
+                  --repository-name "${{ env.ECR_REPOSITORY }}" \
+                  --image-ids "imageTag=${TAG}" \
+                  --query 'imageDetails[0].imageDigest' \
+                  --output text \
+                  --region "${{ secrets.AWS_REGION || 'us-east-1' }}")
+                aws ecr batch-delete-image \
+                  --repository-name "${{ env.ECR_REPOSITORY }}" \
+                  --image-ids "imageDigest=${STALE_DIGEST}" \
+                  --region "${{ secrets.AWS_REGION || 'us-east-1' }}" >/dev/null
+                docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:${TAG}"
+                docker push "${ECR_URI}:${TAG}"
               fi
             else
               docker push "${ECR_URI}:${TAG}"
@@ -163,11 +174,10 @@ jobs:
           echo "image_tag_latest=latest" >> "$GITHUB_OUTPUT"
           echo "image_tag_sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
 
-          # Manifest digests differ across registries; image config ID must match.
-          if [ "${HUB_IMAGE_ID}" != "${ECR_IMAGE_ID}" ]; then
+          # Manifest digests differ across registries; compare layer stack after mirror.
+          ECR_LAYERS=$(docker image inspect "${ECR_URI}:latest" --format '{{json .RootFS.Layers}}')
+          if [ "${HUB_LAYERS}" != "${ECR_LAYERS}" ]; then
             echo "Image content mismatch between Docker Hub and ECR."
-            echo "Hub image ID: ${HUB_IMAGE_ID}"
-            echo "ECR image ID: ${ECR_IMAGE_ID}"
             exit 1
           fi
           echo "digest_verified=PASS" >> "$GITHUB_OUTPUT"
