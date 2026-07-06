@@ -1,0 +1,358 @@
+name: PSIS PE ECR Mirror
+
+# ACI-PE-002: Create/verify ECR repository, mirror Docker Hub PA image, validate ECR pull.
+# Does NOT deploy ECS Express service.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/psis-pe-ecr-mirror.yml
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  DOCKERHUB_IMAGE: taig2k/pitching_sequence_intellegence_system_psis
+  ECR_REPOSITORY: pitching_sequence_intellegence_system_psis
+
+jobs:
+  ecr-mirror:
+    name: ECR Mirror and PE Preparation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Resolve AWS account and ECR URI
+        id: ecr_meta
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+          echo "ecr_uri=${ECR_URI}" >> "$GITHUB_OUTPUT"
+          echo "identity_arn=$(aws sts get-caller-identity --query Arn --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify or create ECR repository
+        id: ecr_repo
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          CREATED=no
+          if aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" --region "${AWS_REGION}" >/tmp/ecr-describe.json 2>/dev/null; then
+            echo "Repository already exists."
+            STATUS=exists
+          else
+            aws ecr create-repository \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag-mutability IMMUTABLE \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256 \
+              --region "${AWS_REGION}" >/tmp/ecr-create.json
+            CREATED=yes
+            STATUS=created
+            cp /tmp/ecr-create.json /tmp/ecr-describe.json
+          fi
+
+          # Ensure required settings on existing repos
+          MUT=$(jq -r '.repositories[0].imageTagMutability // .repository.imageTagMutability' /tmp/ecr-describe.json)
+          SCAN=$(jq -r '.repositories[0].imageScanningConfiguration.scanOnPush // .repository.imageScanningConfiguration.scanOnPush' /tmp/ecr-describe.json)
+          ENC=$(jq -r '.repositories[0].encryptionConfiguration.encryptionType // .repository.encryptionConfiguration.encryptionType' /tmp/ecr-describe.json)
+
+          if [ "$MUT" != "IMMUTABLE" ]; then
+            aws ecr put-image-tag-mutability \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-tag-mutability IMMUTABLE \
+              --region "${AWS_REGION}"
+            MUT=IMMUTABLE
+          fi
+          if [ "$SCAN" != "true" ]; then
+            aws ecr put-image-scanning-configuration \
+              --repository-name "${ECR_REPOSITORY}" \
+              --image-scanning-configuration scanOnPush=true \
+              --region "${AWS_REGION}"
+            SCAN=true
+          fi
+
+          echo "repository_status=${STATUS}" >> "$GITHUB_OUTPUT"
+          echo "repository_created=${CREATED}" >> "$GITHUB_OUTPUT"
+          echo "tag_mutability=${MUT}" >> "$GITHUB_OUTPUT"
+          echo "scan_on_push=${SCAN}" >> "$GITHUB_OUTPUT"
+          echo "encryption=${ENC}" >> "$GITHUB_OUTPUT"
+          echo "repository_uri=${{ steps.ecr_meta.outputs.ecr_uri }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to Amazon ECR
+        id: ecr_login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Mirror image Docker Hub to ECR
+        id: mirror
+        env:
+          DOCKERHUB_IMAGE: ${{ env.DOCKERHUB_IMAGE }}
+          ECR_URI: ${{ steps.ecr_meta.outputs.ecr_uri }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          docker pull "${DOCKERHUB_IMAGE}:latest"
+
+          HUB_DIGEST=$(docker buildx imagetools inspect "${DOCKERHUB_IMAGE}:latest" --format '{{.Manifest.Digest}}')
+          echo "hub_digest=${HUB_DIGEST}" >> "$GITHUB_OUTPUT"
+
+          docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:latest"
+          docker tag "${DOCKERHUB_IMAGE}:latest" "${ECR_URI}:${COMMIT_SHA}"
+
+          docker push "${ECR_URI}:latest"
+          docker push "${ECR_URI}:${COMMIT_SHA}"
+
+          ECR_DIGEST=$(docker buildx imagetools inspect "${ECR_URI}:latest" --format '{{.Manifest.Digest}}')
+          echo "ecr_digest=${ECR_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "image_tag_latest=latest" >> "$GITHUB_OUTPUT"
+          echo "image_tag_sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+
+          if [ "${HUB_DIGEST}" != "${ECR_DIGEST}" ]; then
+            echo "Digest mismatch between Docker Hub and ECR."
+            echo "Hub: ${HUB_DIGEST}"
+            echo "ECR: ${ECR_DIGEST}"
+            exit 1
+          fi
+          echo "digest_verified=PASS" >> "$GITHUB_OUTPUT"
+          echo "mirror_result=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Verify ECR image (pull and inspect)
+        id: ecr_verify
+        env:
+          ECR_URI: ${{ steps.ecr_meta.outputs.ecr_uri }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          docker rmi "${ECR_URI}:latest" 2>/dev/null || true
+          docker pull "${ECR_URI}:latest"
+
+          docker image inspect "${ECR_URI}:latest" >/tmp/ecr-image-inspect.json
+          jq -e '.[0].RepoDigests | length > 0' /tmp/ecr-image-inspect.json >/dev/null
+          echo "inspect_result=PASS" >> "$GITHUB_OUTPUT"
+
+          aws ecr describe-images \
+            --repository-name "${{ env.ECR_REPOSITORY }}" \
+            --image-ids imageTag=latest \
+            --region "${{ secrets.AWS_REGION || 'us-east-1' }}" >/tmp/ecr-describe-images.json
+
+          TAGS=$(jq -r '[.imageDetails[].imageTags[]?] | unique | join(", ")' /tmp/ecr-describe-images.json)
+          META_DIGEST=$(jq -r '.imageDetails[0].imageDigest' /tmp/ecr-describe-images.json)
+          echo "ecr_metadata_digest=${META_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "ecr_tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+          if [ "${META_DIGEST}" != "${{ steps.mirror.outputs.ecr_digest }}" ]; then
+            echo "ECR API digest does not match mirrored digest"
+            exit 1
+          fi
+          echo "metadata_result=PASS" >> "$GITHUB_OUTPUT"
+          echo "tags_result=PASS" >> "$GITHUB_OUTPUT"
+          echo "pull_validation=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: ECS Express readiness probes (no deploy)
+        id: ecs_ready
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          IDENTITY_ARN: ${{ steps.ecr_meta.outputs.identity_arn }}
+        run: |
+          set +e
+
+          check_role() {
+            aws iam get-role --role-name "$1" >/dev/null 2>&1
+            echo $?
+          }
+
+          EXEC_RC=$(check_role ecsTaskExecutionRole)
+          INFRA_RC=$(check_role ecsInfrastructureRoleForExpressServices)
+
+          ECS_LIST_RC=0
+          aws ecs list-clusters --max-results 1 --region "${AWS_REGION}" >/dev/null 2>&1 || ECS_LIST_RC=$?
+
+          SIM_RC=0
+          aws iam simulate-principal-policy \
+            --policy-source-arn "${IDENTITY_ARN}" \
+            --action-names ecs:CreateExpressGatewayService ecs:CreateCluster ecs:RegisterTaskDefinition iam:PassRole ecr:PutImage ecr:InitiateLayerUpload \
+            --resource-arns "*" >/tmp/iam-simulate.json 2>/tmp/iam-simulate.err || SIM_RC=$?
+
+          pass_create_express=UNKNOWN
+          pass_passrole=UNKNOWN
+          pass_cluster=UNKNOWN
+          if [ "$SIM_RC" -eq 0 ]; then
+            allowed() { jq -r --arg a "$1" '[.EvaluationResults[] | select(.EvalActionName==$a) | .EvalDecision] | first // "implicitDeny"' /tmp/iam-simulate.json; }
+            ce=$(allowed ecs:CreateExpressGatewayService)
+            cc=$(allowed ecs:CreateCluster)
+            pr=$(allowed iam:PassRole)
+            [ "$ce" = "allowed" ] && pass_create_express=PASS || pass_create_express=FAIL
+            [ "$cc" = "allowed" ] && pass_cluster=PASS || pass_cluster=UNKNOWN
+            [ "$pr" = "allowed" ] && pass_passrole=PASS || pass_passrole=UNKNOWN
+          fi
+
+          echo "ecs_list=$([ "$ECS_LIST_RC" -eq 0 ] && echo PASS || echo FAIL)" >> "$GITHUB_OUTPUT"
+          echo "task_execution_role=$([ "$EXEC_RC" -eq 0 ] && echo present || echo missing)" >> "$GITHUB_OUTPUT"
+          echo "infrastructure_role=$([ "$INFRA_RC" -eq 0 ] && echo present || echo missing)" >> "$GITHUB_OUTPUT"
+          echo "create_express_service=${pass_create_express}" >> "$GITHUB_OUTPUT"
+          echo "pass_role=${pass_passrole}" >> "$GITHUB_OUTPUT"
+          echo "cluster_create=${pass_cluster}" >> "$GITHUB_OUTPUT"
+          echo "simulate_rc=${SIM_RC}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate ACI-PE-002 report
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACCOUNT_ID: ${{ steps.ecr_meta.outputs.account_id }}
+          ECR_URI: ${{ steps.ecr_meta.outputs.ecr_uri }}
+          IDENTITY_ARN: ${{ steps.ecr_meta.outputs.identity_arn }}
+          REPO_STATUS: ${{ steps.ecr_repo.outputs.repository_status }}
+          REPO_CREATED: ${{ steps.ecr_repo.outputs.repository_created }}
+          TAG_MUT: ${{ steps.ecr_repo.outputs.tag_mutability }}
+          SCAN_ON_PUSH: ${{ steps.ecr_repo.outputs.scan_on_push }}
+          ENCRYPTION: ${{ steps.ecr_repo.outputs.encryption }}
+          HUB_DIGEST: ${{ steps.mirror.outputs.hub_digest }}
+          ECR_DIGEST: ${{ steps.mirror.outputs.ecr_digest }}
+          DIGEST_VERIFIED: ${{ steps.mirror.outputs.digest_verified }}
+          MIRROR_RESULT: ${{ steps.mirror.outputs.mirror_result }}
+          PULL_VALIDATION: ${{ steps.ecr_verify.outputs.pull_validation }}
+          ECR_TAGS: ${{ steps.ecr_verify.outputs.ecr_tags }}
+          ECS_LIST: ${{ steps.ecs_ready.outputs.ecs_list }}
+          TASK_ROLE: ${{ steps.ecs_ready.outputs.task_execution_role }}
+          INFRA_ROLE: ${{ steps.ecs_ready.outputs.infrastructure_role }}
+          CREATE_EXPRESS: ${{ steps.ecs_ready.outputs.create_express_service }}
+          PASS_ROLE: ${{ steps.ecs_ready.outputs.pass_role }}
+          CLUSTER_CREATE: ${{ steps.ecs_ready.outputs.cluster_create }}
+        run: |
+          set -euo pipefail
+          mkdir -p docs/reports
+
+          if [ "${MIRROR_RESULT}" = "PASS" ] && [ "${PULL_VALIDATION}" = "PASS" ]; then
+            if [ "${CREATE_EXPRESS}" = "FAIL" ]; then
+              FINAL="PARTIAL PASS"
+            else
+              FINAL="PASS"
+            fi
+          else
+            FINAL="FAIL"
+          fi
+
+          {
+            echo "# ACI-PE-002 — PSIS ECR Mirror & ECS Express Preparation Report"
+            echo ""
+            echo "**Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            echo "**Workflow run:** ${RUN_URL}"
+            echo "**Commit SHA:** \`${COMMIT_SHA}\`"
+            echo "**AWS account:** \`${ACCOUNT_ID}\`"
+            echo "**AWS identity:** \`${IDENTITY_ARN}\`"
+            echo "**Region:** \`${{ secrets.AWS_REGION || 'us-east-1' }}\`"
+            echo ""
+            echo "## Executive Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Repository URI | \`${ECR_URI}\` |"
+            echo "| Repository created this run | ${REPO_CREATED} |"
+            echo "| Image mirrored | ${MIRROR_RESULT:-FAIL} |"
+            echo "| Digest verified (Hub = ECR) | ${DIGEST_VERIFIED:-FAIL} |"
+            echo "| ECR pull validation | ${PULL_VALIDATION:-FAIL} |"
+            echo "| ECS Express create (simulated) | ${CREATE_EXPRESS} |"
+            echo "| **Final status** | **${FINAL}** |"
+            echo ""
+            echo "## 1. ECR Repository"
+            echo ""
+            echo "| Setting | Value |"
+            echo "|---------|-------|"
+            echo "| Name | \`${{ env.ECR_REPOSITORY }}\` |"
+            echo "| URI | \`${ECR_URI}\` |"
+            echo "| Status | ${REPO_STATUS} |"
+            echo "| Created this run | ${REPO_CREATED} |"
+            echo "| Tag mutability | ${TAG_MUT} |"
+            echo "| Scan on push | ${SCAN_ON_PUSH} |"
+            echo "| Encryption | ${ENCRYPTION} |"
+            echo ""
+            echo "## 2. Image Mirror (Docker Hub → ECR)"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Source | \`${{ env.DOCKERHUB_IMAGE }}:latest\` |"
+            echo "| Hub digest | \`${HUB_DIGEST}\` |"
+            echo "| ECR digest | \`${ECR_DIGEST}\` |"
+            echo "| Tags pushed | \`latest\`, \`${COMMIT_SHA}\` |"
+            echo "| Digest match | ${DIGEST_VERIFIED} |"
+            echo "| Mirror result | ${MIRROR_RESULT} |"
+            echo ""
+            echo "## 3. ECR Pull Validation"
+            echo ""
+            echo "| Check | Result |"
+            echo "|-------|--------|"
+            echo "| Pull from ECR | ${PULL_VALIDATION} |"
+            echo "| docker image inspect | ${{ steps.ecr_verify.outputs.inspect_result }} |"
+            echo "| describe-images metadata | ${{ steps.ecr_verify.outputs.metadata_result }} |"
+            echo "| Tags in ECR | ${ECR_TAGS} |"
+            echo ""
+            echo "## 4. ECS Express Readiness (no service created)"
+            echo ""
+            echo "| Check | Result |"
+            echo "|-------|--------|"
+            echo "| ECS list-clusters | ${ECS_LIST} |"
+            echo "| ecsTaskExecutionRole | ${TASK_ROLE} |"
+            echo "| ecsInfrastructureRoleForExpressServices | ${INFRA_ROLE} |"
+            echo "| iam:PassRole (simulated) | ${PASS_ROLE} |"
+            echo "| ecs:CreateExpressGatewayService (simulated) | ${CREATE_EXPRESS} |"
+            echo "| ecs:CreateCluster (simulated) | ${CLUSTER_CREATE} |"
+            echo ""
+            echo "Create-time permissions may remain UNKNOWN if IAM simulate is unavailable or inconclusive."
+            echo ""
+            echo "## 5. Known Blockers"
+            echo ""
+            if [ "${TASK_ROLE}" = "missing" ] || [ "${INFRA_ROLE}" = "missing" ]; then
+              echo "- ECS Express IAM roles may need to be created or granted."
+            fi
+            if [ "${CREATE_EXPRESS}" != "PASS" ]; then
+              echo "- ECS Express service creation permission not confirmed."
+            fi
+            echo "- ECS Express **service not deployed** in this ACI (by design)."
+            echo "- JSON persistence / EFS not configured."
+            echo ""
+            echo "## 6. Recommendations"
+            echo ""
+            echo "1. Next ACI: deploy PSIS via ECS Express Mode using \`${ECR_URI}:latest\`."
+            echo "2. Health check: \`GET /api/healthz\`, port \`8080\`."
+            echo "3. Ensure \`ecsTaskExecutionRole\` and \`ecsInfrastructureRoleForExpressServices\` exist with trust policies."
+            echo "4. Grant \`iam:PassRole\` for ECS Express deploy principal."
+            echo "5. Plan EFS mount for \`/app/artifacts/api-server/data\` in persistence ACI."
+            echo ""
+            echo "## 7. Pull Commands"
+            echo ""
+            echo "\`\`\`bash"
+            echo "aws ecr get-login-password --region ${{ secrets.AWS_REGION || 'us-east-1' }} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_REGION || 'us-east-1' }}.amazonaws.com"
+            echo "docker pull ${ECR_URI}:latest"
+            echo "\`\`\`"
+          } > docs/reports/ACI_PE_002_ECR_Preparation_Report.md
+
+      - name: Upload ACI-PE-002 report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACI_PE_002_ECR_Preparation
+          path: docs/reports/ACI_PE_002_ECR_Preparation_Report.md
+          retention-days: 90
